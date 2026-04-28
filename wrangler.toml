@@ -1,0 +1,13 @@
+name = "ref-baily-life"
+compatibility_date = "2026-04-25"
+compatibility_flags = ["nodejs_compat"]
+pages_build_output_dir = ".svelte-kit/cloudflare"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "ref-baily-life"
+database_id = "d3f9e267-0012-4b2e-80fa-6b1459881ac6"
+
+[vars]
+APP_URL = "https://ref.baily.life"
+CRM_API_BASE = "https://crm.baily.life"

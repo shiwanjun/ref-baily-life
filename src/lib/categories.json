@@ -1,0 +1,42 @@
+[
+  {
+    "name": "返现购物",
+    "description": "购物返利、消费返现",
+    "sort": 10
+  },
+  {
+    "name": "银行开户",
+    "description": "银行账户、支票账户、开户奖励",
+    "sort": 20
+  },
+  {
+    "name": "信用卡申请",
+    "description": "个人卡、商业卡、团办入口",
+    "sort": 30
+  },
+  {
+    "name": "券商与交易所",
+    "description": "券商、股票、加密交易平台",
+    "sort": 40
+  },
+  {
+    "name": "支付汇款与钱包",
+    "description": "跨境汇款、支付工具、冷热钱包",
+    "sort": 50
+  },
+  {
+    "name": "eSIM 通信与地址",
+    "description": "手机卡、流量、美国地址",
+    "sort": 60
+  },
+  {
+    "name": "旅行与理赔",
+    "description": "航班延误、旅行保障",
+    "sort": 70
+  },
+  {
+    "name": "数字服务与好物",
+    "description": "会员、AI 工具、实物好物",
+    "sort": 80
+  }
+]
