@@ -150,6 +150,6 @@ export function enrichSite(site: RawSite & Partial<Pick<Site, 'category' | 'tags
 	} satisfies Site;
 }
 
-export const fallbackSites: Site[] = (sitesData as RawSite[])
-	.filter((site) => !site.hide)
-	.map(enrichSite);
+export const fallbackAllSites: Site[] = (sitesData as RawSite[]).map(enrichSite);
+
+export const fallbackSites: Site[] = fallbackAllSites.filter((site) => !site.hide);

@@ -47,7 +47,12 @@
 				site.category.toLowerCase().includes(keyword) ||
 				site.tags.some((tag) => tag.toLowerCase().includes(keyword));
 			return inCategory && inSearch;
-		})
+		}).toSorted(
+			(a, b) =>
+				Number(b.featured) - Number(a.featured) ||
+				a.sort - b.sort ||
+				a.id - b.id
+		)
 	);
 
 	const featuredSites = $derived(
@@ -384,7 +389,10 @@
 			{:else}
 				<div class="site-grid">
 					{#each visibleSites as site}
-						<article class="site-card" class:editing={adminEditMode}>
+						<article class="site-card" class:editing={adminEditMode} class:featured={Boolean(site.featured)} class:hidden={Boolean(data.loggedIn && site.hide)}>
+							{#if site.featured}
+								<span class="featured-star" aria-label="精选推荐">★</span>
+							{/if}
 							{#if !adminEditMode}
 								<a class="card-link" href={normalizeUrl(site.url)} target="_blank" rel="noreferrer" aria-label={site.name} onclick={(event) => openWithReminder(event, site)}></a>
 							{/if}
@@ -404,6 +412,9 @@
 								</div>
 								<p>{site.desc || site.catelog}</p>
 								<div class="site-meta">
+									{#if data.loggedIn && site.hide}
+										<span class="hidden-status">已隐藏</span>
+									{/if}
 									<span>{site.category}</span>
 									{#each site.tags as tag}
 										<span class:warn-tag={tag === '注意条件'}>{tag}</span>
@@ -1132,8 +1143,38 @@
 			box-shadow 160ms ease;
 	}
 
+	.site-card.featured {
+		border-color: rgba(245, 158, 11, 0.34);
+		background:
+			linear-gradient(135deg, rgba(255, 251, 235, 0.92), rgba(255, 255, 255, 0.88) 42%),
+			rgba(255, 255, 255, 0.82);
+	}
+
+	.site-card.hidden {
+		border-style: dashed;
+		opacity: 0.68;
+	}
+
 	.site-card.editing {
 		grid-template-columns: 54px minmax(0, 1fr) auto;
+	}
+
+	.featured-star {
+		position: absolute;
+		top: 8px;
+		left: 8px;
+		z-index: 4;
+		display: grid;
+		height: 22px;
+		width: 22px;
+		place-items: center;
+		border: 1px solid rgba(217, 119, 6, 0.24);
+		border-radius: 999px;
+		background: #f59e0b;
+		color: #ffffff;
+		box-shadow: 0 8px 18px rgba(245, 158, 11, 0.24);
+		font-size: 13px;
+		line-height: 1;
 	}
 
 	.card-link {
@@ -1257,6 +1298,11 @@
 	.site-meta .warn-tag {
 		background: #fef3c7;
 		color: #92400e;
+	}
+
+	.site-meta .hidden-status {
+		background: #e2e8f0;
+		color: #475569;
 	}
 
 	.empty {
@@ -1856,6 +1902,13 @@
 		color: #e5e7eb;
 	}
 
+	:global(body.dark) .site-card.featured {
+		border-color: rgba(245, 158, 11, 0.32);
+		background:
+			linear-gradient(135deg, rgba(146, 64, 14, 0.2), rgba(15, 23, 42, 0.78) 46%),
+			rgba(15, 23, 42, 0.74);
+	}
+
 	:global(body.dark) .modal,
 	:global(body.dark) .modal-close,
 	:global(body.dark) .modal input,
@@ -1934,6 +1987,11 @@
 	:global(body.dark) .site-meta .warn-tag {
 		background: rgba(245, 158, 11, 0.18);
 		color: #fcd34d;
+	}
+
+	:global(body.dark) .site-meta .hidden-status {
+		background: rgba(148, 163, 184, 0.18);
+		color: #cbd5e1;
 	}
 
 	@media (max-width: 980px) {

@@ -14,9 +14,10 @@ import { fail, redirect, type Actions } from '@sveltejs/kit';
 
 export async function load({ cookies, platform }) {
 	const db = dbFromPlatform(platform);
+	const loggedIn = await isAdmin(cookies, platform?.env);
 	return {
-		...(await listPublicSites(db)),
-		loggedIn: await isAdmin(cookies, platform?.env),
+		...(await listPublicSites(db, { includeHidden: loggedIn })),
+		loggedIn,
 		user: await currentRefUser(cookies, db, platform?.env).then((user) =>
 			user
 				? {

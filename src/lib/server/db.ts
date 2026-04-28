@@ -1,4 +1,12 @@
-import { categories as fallbackCategories, fallbackSites, settings, type Category, type CategoryName, type Site } from '$lib/ref-data';
+import {
+	categories as fallbackCategories,
+	fallbackAllSites,
+	fallbackSites,
+	settings,
+	type Category,
+	type CategoryName,
+	type Site
+} from '$lib/ref-data';
 import type { D1Database } from '@cloudflare/workers-types';
 
 type SiteRow = {
@@ -42,19 +50,25 @@ function rowToSite(row: SiteRow): Site {
 	};
 }
 
-export async function listPublicSites(db: D1Database | undefined) {
+export async function listPublicSites(db: D1Database | undefined, options: { includeHidden?: boolean } = {}) {
 	if (!db) {
-		return { sites: fallbackSites, categories: fallbackCategories, settings, source: 'fallback' as const };
+		return {
+			sites: options.includeHidden ? fallbackAllSites : fallbackSites,
+			categories: fallbackCategories,
+			settings,
+			source: 'fallback' as const
+		};
 	}
 
 	try {
+		const hiddenFilter = options.includeHidden ? '' : 'WHERE hidden = 0';
 		const [sitesResult, categoriesResult] = await Promise.all([
 			db
 			.prepare(
 				`SELECT id, name, url, logo, catelog, description, sort_order, hidden, category, tags, featured
 				 FROM sites
-				 WHERE hidden = 0
-				 ORDER BY sort_order ASC, id ASC`
+				 ${hiddenFilter}
+				 ORDER BY featured DESC, sort_order ASC, id ASC`
 			)
 			.all<SiteRow>(),
 			listCategoriesResult(db)
@@ -66,7 +80,12 @@ export async function listPublicSites(db: D1Database | undefined) {
 			source: 'd1' as const
 		};
 	} catch {
-		return { sites: fallbackSites, categories: fallbackCategories, settings, source: 'fallback' as const };
+		return {
+			sites: options.includeHidden ? fallbackAllSites : fallbackSites,
+			categories: fallbackCategories,
+			settings,
+			source: 'fallback' as const
+		};
 	}
 }
 
