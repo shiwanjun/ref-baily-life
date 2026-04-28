@@ -2229,6 +2229,10 @@
 		.category-rail button {
 			white-space: nowrap;
 		}
+
+		.wechat-card {
+			display: none;
+		}
 	}
 
 	@media (max-width: 680px) {
