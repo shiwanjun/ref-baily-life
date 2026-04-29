@@ -113,7 +113,7 @@ const categoryById = new Map<number, CategoryName>([
 
 const featuredIds = new Set([2, 1, 46, 49, 34, 15]);
 
-export const settings = settingsData[0] ?? { title: '莲塘导航' };
+export const settings = settingsData[0] ?? { title: 'LT导航' };
 
 export function buildTags(site: Pick<RawSite, 'name' | 'desc' | 'url' | 'catelog'>) {
 	const text = `${site.name} ${site.desc} ${site.url} ${site.catelog}`.toLowerCase();

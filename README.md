@@ -1,4 +1,4 @@
-# 莲塘导航 / liantang.fun
+# LT导航 / liantang.fun
 
 一个部署在 Cloudflare Pages + Cloudflare D1 上的个人推荐导航站，用来集中整理返现购物、银行开户、信用卡申请、券商交易、支付汇款、eSIM、旅行理赔和数字服务等常用入口。
 

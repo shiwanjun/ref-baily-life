@@ -265,21 +265,21 @@
 </script>
 
 <svelte:head>
-	<title>莲塘导航 — liantang.fun</title>
+	<title>LT导航 — liantang.fun</title>
 	<meta
 		name="description"
-		content="莲塘导航收集返现、开户、支付、eSIM、理赔和实用工具链接，方便快速筛选常用推荐入口。"
+		content="LT导航收集返现、开户、支付、eSIM、理赔和实用工具链接，方便快速筛选常用推荐入口。"
 	/>
 </svelte:head>
 
 <main class="shell">
 	<header class="topbar">
-		<a class="brand" href="/" aria-label="莲塘导航">
+		<a class="brand" href="/" aria-label="LT导航">
 			<span class="brand-mark" aria-hidden="true">
-				<span>莲</span>
+				<span>LT</span>
 			</span>
 			<span>
-				<strong>莲塘导航</strong>
+				<strong>LT导航</strong>
 				<small>liantang.fun</small>
 			</span>
 		</a>
@@ -312,7 +312,7 @@
 
 	<section class="hero">
 		<div class="hero-copy">
-			<p class="eyebrow">Liantang referral desk</p>
+			<p class="eyebrow">LT referral desk</p>
 			<h1>返现、开户、工具和好物推荐</h1>
 			<p class="lead">
 				把常用入口集中在一个干净的页面里，按分类筛选，快速找到返现网站、证券平台、支付工具、eSIM 和航空理赔等链接。
@@ -391,7 +391,7 @@
 					+ 新增分类
 				</button>
 			{/if}
-			<div class="wechat-card" aria-label="关注公众号莲塘导航">
+			<div class="wechat-card" aria-label="关注公众号 LT导航">
 				<div class="wechat-qr" aria-hidden="true">
 					{#if wechatQr}
 						<img src={wechatQr} alt="" loading="lazy" />
@@ -404,7 +404,7 @@
 				</div>
 				<div>
 					<p>微信公众号</p>
-					<h3>莲塘导航</h3>
+					<h3>LT导航</h3>
 					<span>占位二维码已生成，后续替换同名图片即可接入真实公众号。</span>
 				</div>
 			</div>
@@ -497,7 +497,7 @@
 					<h2>{data.user ? '管理你的账号' : userMode === 'login' ? '登录你的账号' : '创建你的账号'}</h2>
 					<p>
 						{data.user
-							? '更新联系方式、开通 VIP，并同步到莲塘会员中心。'
+							? '更新联系方式、开通 VIP，并同步到 LT 会员中心。'
 							: userMode === 'login'
 								? '输入邮箱和密码即可登录。'
 								: '填写邮箱和密码，开始同步你的会员权益。'}
@@ -507,7 +507,7 @@
 					<button class="auth-card-close" type="button" aria-label="关闭账号窗口" onclick={() => (showUserPanel = false)}>×</button>
 				{#if data.user}
 					<h2>推荐站账号</h2>
-					<p>一站登录，解锁并同步莲塘导航会员权益内容。</p>
+					<p>一站登录，解锁并同步 LT导航会员权益内容。</p>
 					<div class="account-panel">
 						<span>{data.user.vip_status === 'active' ? 'VIP 用户' : '普通用户'}</span>
 						<strong>{data.user.display_name || data.user.email}</strong>
@@ -520,7 +520,7 @@
 						</label>
 						<label>
 							显示名称
-							<input name="display_name" value={data.user.display_name} placeholder="莲塘朋友" />
+							<input name="display_name" value={data.user.display_name} placeholder="LT 朋友" />
 						</label>
 						<label>
 							微信
@@ -544,7 +544,7 @@
 					</div>
 				{:else}
 					<h2>{userMode === 'login' ? '登录推荐站账号' : '注册推荐站账号'}</h2>
-					<p>一站登录，解锁并同步莲塘导航会员权益内容。</p>
+					<p>一站登录，解锁并同步 LT导航会员权益内容。</p>
 					<div class="auth-switch auth-card-tabs" role="tablist" aria-label="账号模式">
 						<button type="button" class:active={userMode === 'register'} onclick={() => (userMode = 'register')}>
 							<strong>注册</strong>
@@ -575,7 +575,7 @@
 							</label>
 							<label>
 								显示名称
-								<input name="display_name" placeholder="莲塘朋友" autocomplete="name" />
+								<input name="display_name" placeholder="LT 朋友" autocomplete="name" />
 							</label>
 							<label>
 								密码
@@ -618,7 +618,7 @@
 		<div class="modal-backdrop" role="button" tabindex="0" aria-label="关闭提醒备注" onclick={(event) => { if (event.currentTarget === event.target) reminderSite = null; }} onkeydown={(event) => closeOnBackdropKey(event, () => (reminderSite = null))}>
 			<section class="modal reminder-modal" role="dialog" aria-modal="true" tabindex="-1">
 				<button class="modal-close" type="button" onclick={() => (reminderSite = null)}>×</button>
-				<p class="modal-eyebrow"><span aria-hidden="true">💡</span> 莲塘提醒你哦</p>
+				<p class="modal-eyebrow"><span aria-hidden="true">💡</span> LT 提醒你哦</p>
 				<h2>{reminderSite.name}</h2>
 				<div class="reminder-note">
 					<span class="reminder-icon" aria-hidden="true">✨</span>
