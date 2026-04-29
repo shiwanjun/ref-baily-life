@@ -186,6 +186,10 @@
 </main>
 
 <style>
+	:global(html) {
+		scroll-behavior: smooth;
+	}
+
 	.admin-shell {
 		min-height: 100vh;
 		padding: 22px;
@@ -249,6 +253,29 @@
 		background: #ffffff;
 	}
 
+	.login-panel,
+	.create-panel,
+	.toolbar,
+	.site-editor-list article {
+		animation: slide-up 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+	}
+
+	.toolbar {
+		animation-delay: 60ms;
+	}
+
+	.site-editor-list article:nth-child(1) {
+		animation-delay: 100ms;
+	}
+
+	.site-editor-list article:nth-child(2) {
+		animation-delay: 140ms;
+	}
+
+	.site-editor-list article:nth-child(3) {
+		animation-delay: 180ms;
+	}
+
 	.notice {
 		max-width: 1120px;
 		margin: 16px auto 0;
@@ -300,10 +327,23 @@
 		padding: 10px 11px;
 		color: #111827;
 		font: inherit;
+		transition:
+			border-color 180ms ease,
+			box-shadow 180ms ease,
+			transform 180ms ease;
 	}
 
 	textarea {
 		resize: vertical;
+	}
+
+	input:focus,
+	select:focus,
+	textarea:focus {
+		outline: none;
+		border-color: rgba(37, 99, 235, 0.4);
+		box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.08);
+		transform: translateY(-1px);
 	}
 
 	button {
@@ -312,6 +352,18 @@
 		padding: 10px 14px;
 		font: inherit;
 		font-weight: 700;
+		transition:
+			transform 180ms ease,
+			box-shadow 180ms ease,
+			background-color 180ms ease;
+	}
+
+	button:hover {
+		transform: translateY(-1px);
+	}
+
+	button:active {
+		transform: translateY(0) scale(0.985);
 	}
 
 	.primary,
@@ -386,6 +438,16 @@
 
 	.site-editor-list article {
 		padding: 16px;
+		transition:
+			transform 180ms ease,
+			box-shadow 180ms ease,
+			border-color 180ms ease;
+	}
+
+	.site-editor-list article:hover {
+		transform: translateY(-2px);
+		box-shadow: 0 18px 36px rgba(15, 23, 42, 0.06);
+		border-color: rgba(37, 99, 235, 0.14);
 	}
 
 	.hidden-card {
@@ -437,6 +499,18 @@
 		color: #475569;
 		font-size: 13px;
 		font-weight: 700;
+	}
+
+	@keyframes slide-up {
+		from {
+			opacity: 0;
+			transform: translateY(10px);
+		}
+
+		to {
+			opacity: 1;
+			transform: translateY(0);
+		}
 	}
 
 	@media (max-width: 760px) {
