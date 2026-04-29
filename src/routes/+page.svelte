@@ -1052,11 +1052,14 @@
 		position: sticky;
 		top: 18px;
 		display: grid;
+		min-width: 0;
 		gap: 8px;
 	}
 
 	.category-rail button {
 		display: flex;
+		width: 100%;
+		min-width: 0;
 		min-height: 58px;
 		align-items: center;
 		justify-content: space-between;
@@ -2182,7 +2185,7 @@
 		color: #cbd5e1;
 	}
 
-	@media (max-width: 980px) {
+	@media (max-width: 1120px) {
 		.auth-page {
 			min-height: auto;
 			grid-template-columns: 1fr;
@@ -2206,11 +2209,22 @@
 			position: static;
 			display: flex;
 			overflow-x: auto;
+			min-width: 0;
 			padding-bottom: 2px;
 		}
 
 		.category-rail button {
+			flex: 0 0 220px;
 			white-space: nowrap;
+		}
+
+		.results-head {
+			flex-wrap: wrap;
+			align-items: flex-start;
+		}
+
+		.site-grid {
+			grid-template-columns: 1fr;
 		}
 
 		.wechat-card {
