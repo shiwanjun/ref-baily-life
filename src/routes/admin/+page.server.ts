@@ -94,28 +94,6 @@ export const actions: Actions = {
 		return { success: '已新增推荐。' };
 	},
 
-	createCategory: async ({ request, cookies, platform }) => {
-		if (!(await isAdmin(cookies, platform?.env))) return fail(401, { error: '请先登录。' });
-		const db = requireDb(platform);
-		const form = await request.formData();
-		const name = text(form, 'name');
-		if (!name) return fail(400, { error: '分类名称不能为空。' });
-
-		await db
-			.prepare(
-				`INSERT INTO categories (name, description, sort_order)
-				 VALUES (?, ?, ?)
-				 ON CONFLICT(name) DO UPDATE
-				 SET description = excluded.description,
-				     sort_order = excluded.sort_order,
-				     updated_at = CURRENT_TIMESTAMP`
-			)
-			.bind(name, text(form, 'description'), intValue(form, 'sort', 100))
-			.run();
-
-		return { success: '分类已保存。' };
-	},
-
 	update: async ({ request, cookies, platform }) => {
 		if (!(await isAdmin(cookies, platform?.env))) return fail(401, { error: '请先登录。' });
 		const db = requireDb(platform);
