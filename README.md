@@ -123,7 +123,7 @@ Custom domains -> Set up a custom domain -> liantang.fun
 
 ## 管理内容
 
-配置 `ADMIN_PASSWORD` 后，访问站点右上角「管理」入口即可登录。登录后可以直接在页面内新增、编辑、隐藏、删除推荐内容和分类。
+配置 `ADMIN_PASSWORD` 后，管理员直接访问 `/admin` 登录。普通访客首页不显示管理入口；管理员登录后回到首页，才会出现新增、编辑、隐藏、删除推荐内容和分类的管理控件。
 
 推荐日常内容维护优先使用页面内管理功能；代码里的 `src/lib/sites.json` 和 `src/lib/categories.json` 主要作为 D1 不可用时的 fallback 数据。
 
