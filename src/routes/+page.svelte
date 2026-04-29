@@ -305,7 +305,9 @@
 					<button class="nav-button" onclick={() => setAdminEditMode(false)}>退出</button>
 				</form>
 			{:else}
-				<button type="button" class="nav-button" onclick={() => (showLogin = true)}>管理</button>
+				<button type="button" class="nav-button" aria-label="站点管理入口，仅管理员使用" onclick={() => (showLogin = true)}>
+					站点管理
+				</button>
 			{/if}
 			<button type="button" class="icon-button" aria-label="切换深色模式" onclick={() => (darkMode = !darkMode)}>
 				{darkMode ? '☀' : '◐'}
@@ -493,8 +495,8 @@
 		<div class="modal-backdrop" role="button" tabindex="0" aria-label="关闭登录窗口" onclick={(event) => { if (event.currentTarget === event.target) showLogin = false; }} onkeydown={(event) => closeOnBackdropKey(event, () => (showLogin = false))}>
 			<section class="modal small-modal" role="dialog" aria-modal="true" tabindex="-1">
 				<button class="modal-close" type="button" onclick={() => (showLogin = false)}>×</button>
-				<h2>进入管理模式</h2>
-				<p>登录后可以直接在当前页面新增、编辑、删除推荐和分类。</p>
+				<h2>管理员登录</h2>
+				<p>此入口仅供站点管理者使用。登录后可以直接在当前页面新增、编辑、删除推荐和分类。</p>
 				<form method="POST" action="?/login" class="modal-form">
 					<input name="password" type="password" placeholder="管理密码" required />
 					<button class="primary-button">登录</button>
