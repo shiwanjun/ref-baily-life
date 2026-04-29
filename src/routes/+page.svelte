@@ -1041,14 +1041,15 @@
 
 	.content {
 		margin: 18px auto 0;
-		display: grid;
+		display: flex;
 		max-width: 1180px;
-		grid-template-columns: 260px minmax(0, 1fr);
 		gap: 18px;
 		align-items: start;
 	}
 
 	.category-rail {
+		flex: 0 0 260px;
+		width: 260px;
 		position: sticky;
 		top: 18px;
 		display: grid;
@@ -1218,6 +1219,7 @@
 	}
 
 	.results {
+		flex: 1 1 0;
 		min-width: 0;
 	}
 
@@ -1253,7 +1255,7 @@
 
 	.site-grid {
 		display: grid;
-		grid-template-columns: repeat(2, minmax(0, 1fr));
+		grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
 		gap: 12px;
 	}
 
@@ -2202,10 +2204,13 @@
 
 		.hero,
 		.content {
+			display: grid;
 			grid-template-columns: 1fr;
 		}
 
 		.category-rail {
+			flex: initial;
+			width: auto;
 			position: static;
 			display: flex;
 			overflow-x: auto;
