@@ -119,7 +119,14 @@ Build output directory: .svelte-kit/cloudflare
 Custom domains -> Set up a custom domain -> liantang.fun
 ```
 
-如果域名已经托管在 Cloudflare，会自动补齐 DNS。若域名不在 Cloudflare，按页面提示添加 CNAME 或迁移 DNS 托管。
+当前 Pages 项目已添加 `liantang.fun` 作为自定义域名。若 DNS 没有自动补齐，在 Cloudflare DNS 中添加：
+
+```text
+类型：CNAME
+名称：@
+目标：liantang-fun.pages.dev
+代理：开启
+```
 
 ## 管理内容
 
