@@ -114,12 +114,16 @@ export async function listCategories(db: D1Database | undefined) {
 
 export async function listAdminSites(db: D1Database | undefined) {
 	if (!db) return [];
-	const result = await db
-		.prepare(
-			`SELECT id, name, url, logo, catelog, description, sort_order, hidden, category, tags, featured
-			 FROM sites
-			 ORDER BY hidden ASC, category ASC, sort_order ASC, id ASC`
-		)
-		.all<SiteRow>();
-	return result.results.map(rowToSite);
+	try {
+		const result = await db
+			.prepare(
+				`SELECT id, name, url, logo, catelog, description, sort_order, hidden, category, tags, featured
+				 FROM sites
+				 ORDER BY hidden ASC, category ASC, sort_order ASC, id ASC`
+			)
+			.all<SiteRow>();
+		return result.results.map(rowToSite);
+	} catch {
+		return [];
+	}
 }
