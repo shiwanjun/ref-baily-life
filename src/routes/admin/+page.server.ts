@@ -1,6 +1,5 @@
-import { categoryNames, type CategoryName } from '$lib/ref-data';
 import { clearAdminCookie, isAdmin, setAdminCookie } from '$lib/server/auth';
-import { dbFromPlatform, listAdminSites } from '$lib/server/db';
+import { dbFromPlatform, listAdminSites, listCategories } from '$lib/server/db';
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -26,8 +25,7 @@ function tagsValue(form: FormData) {
 }
 
 function categoryValue(form: FormData) {
-	const category = text(form, 'category') as CategoryName;
-	return categoryNames.includes(category) ? category : '数字服务与好物';
+	return text(form, 'category') || '数字服务与好物';
 }
 
 function requireDb(platform: App.Platform | undefined) {
@@ -39,13 +37,14 @@ function requireDb(platform: App.Platform | undefined) {
 }
 
 export const load: PageServerLoad = async ({ cookies, platform }) => {
+	const db = dbFromPlatform(platform);
 	const loggedIn = await isAdmin(cookies, platform?.env);
 	return {
 		loggedIn,
 		configured: Boolean(platform?.env?.ADMIN_PASSWORD),
-		hasDb: Boolean(dbFromPlatform(platform)),
-		categories: categoryNames,
-		sites: loggedIn ? await listAdminSites(dbFromPlatform(platform)) : []
+		hasDb: Boolean(db),
+		categories: (await listCategories(db)).map((category) => category.name),
+		sites: loggedIn ? await listAdminSites(db) : []
 	};
 };
 
