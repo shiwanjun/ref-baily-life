@@ -1,5 +1,5 @@
 import { clearAdminCookie, isAdmin, setAdminCookie } from '$lib/server/auth';
-import { dbFromPlatform, listAdminSites, listCategories } from '$lib/server/db';
+import { dbFromPlatform, listAdminSites, listCategories, createCategory } from '$lib/server/db';
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -135,5 +135,18 @@ export const actions: Actions = {
 
 		await db.prepare('DELETE FROM sites WHERE id = ?').bind(id).run();
 		return { success: '已删除推荐。' };
+	},
+
+	createCategory: async ({ request, cookies, platform }) => {
+		if (!(await isAdmin(cookies, platform?.env))) return fail(401, { error: '请先登录。' });
+		const db = requireDb(platform);
+		const form = await request.formData();
+		const name = text(form, 'categoryName');
+		if (!name) return fail(400, { error: '分类名称不能为空。' });
+
+		const success = await createCategory(db, name, text(form, 'categoryDesc'), intValue(form, 'categorySort', 100));
+		if (!success) return fail(500, { error: '创建分类失败。' });
+
+		return { success: '已新增分类。' };
 	}
 };

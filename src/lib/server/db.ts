@@ -127,3 +127,20 @@ export async function listAdminSites(db: D1Database | undefined) {
 		return [];
 	}
 }
+
+export async function createCategory(
+	db: D1Database,
+	name: string,
+	description: string = '',
+	sortOrder: number = 0
+) {
+	try {
+		await db
+			.prepare('INSERT INTO categories (name, description, sort_order) VALUES (?, ?, ?)')
+			.bind(name, description, sortOrder)
+			.run();
+		return true;
+	} catch {
+		return false;
+	}
+}

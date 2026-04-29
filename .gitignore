@@ -6,3 +6,7 @@ node_modules
 .admin-password
 .DS_Store
 npm-debug.log*
+config.md
+.claude
+docs/code-wiki
+open-design
