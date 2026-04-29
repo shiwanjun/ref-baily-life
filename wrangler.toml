@@ -1,13 +1,12 @@
-name = "ref-baily-life"
+name = "liantang-fun"
 compatibility_date = "2026-04-25"
 compatibility_flags = ["nodejs_compat"]
 pages_build_output_dir = ".svelte-kit/cloudflare"
 
 [[d1_databases]]
 binding = "DB"
-database_name = "ref-baily-life"
-database_id = "d3f9e267-0012-4b2e-80fa-6b1459881ac6"
+database_name = "liantang-fun"
+database_id = "1cb9eb84-e719-4d5a-8495-d24f0f6c4f56"
 
 [vars]
-APP_URL = "https://ref.baily.life"
-CRM_API_BASE = "https://crm.baily.life"
+APP_URL = "https://liantang.fun"

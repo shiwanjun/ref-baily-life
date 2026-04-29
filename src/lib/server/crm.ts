@@ -57,7 +57,8 @@ export async function syncRefUserToCrm(
 		const user = await db.prepare('SELECT * FROM ref_users WHERE id = ?').bind(userId).first<RefUser>();
 		if (!user?.email) return null;
 
-		const base = (env.CRM_API_BASE || 'https://crm.baily.life').replace(/\/+$/, '');
+		const base = env.CRM_API_BASE?.replace(/\/+$/, '');
+		if (!base) return null;
 		const response = await fetch(`${base}/api/users/upsert`, {
 			method: 'POST',
 			headers: {

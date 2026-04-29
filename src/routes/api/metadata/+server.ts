@@ -42,7 +42,7 @@ export async function GET({ url }) {
 		const response = await fetch(parsed.toString(), {
 			headers: {
 				'user-agent':
-					'Mozilla/5.0 (compatible; ref.baily.life metadata fetcher; +https://ref.baily.life)'
+					'Mozilla/5.0 (compatible; liantang.fun metadata fetcher; +https://liantang.fun)'
 			},
 			redirect: 'follow'
 		});

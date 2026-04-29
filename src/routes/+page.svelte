@@ -12,7 +12,7 @@
 	let darkMode = $state(false);
 	let brokenLogoIds = $state(new Set<number>());
 	let editMode = $state(false);
-	const editModeStorageKey = 'ref-baily-edit-mode';
+	const editModeStorageKey = 'liantang-edit-mode';
 	const adminEditMode = $derived(Boolean(data.loggedIn && editMode));
 	let showLogin = $state(false);
 	let showUserPanel = $state(false);
@@ -266,27 +266,27 @@
 </script>
 
 <svelte:head>
-	<title>贝利真心为你推荐 — ref.baily.life</title>
+	<title>莲塘导航 — liantang.fun</title>
 	<meta
 		name="description"
-		content="贝利说推荐入口，收集返现、开户、支付、eSIM、理赔和实用工具链接。"
+		content="莲塘导航收集返现、开户、支付、eSIM、理赔和实用工具链接，方便快速筛选常用推荐入口。"
 	/>
 </svelte:head>
 
 <main class="shell">
 	<header class="topbar">
-		<a class="brand" href="/" aria-label="贝利推荐">
+		<a class="brand" href="/" aria-label="莲塘导航">
 			<span class="brand-mark" aria-hidden="true">
-				<span>ref</span>
+				<span>莲</span>
 			</span>
 			<span>
-				<strong>贝利真心为你推荐</strong>
-				<small>ref.baily.life</small>
+				<strong>莲塘导航</strong>
+				<small>liantang.fun</small>
 			</span>
 		</a>
 		<nav class="nav-actions" aria-label="页面操作">
-			<a href="https://www.baily.life" target="_blank" rel="noreferrer">主页</a>
-			<a href="https://card.baily.life" target="_blank" rel="noreferrer">卡片</a>
+			<a href="#usage-note">说明</a>
+			<a href="#update-note">反馈</a>
 			<button type="button" class="nav-button user-entry" onclick={() => (showUserPanel = true)}>
 				{#if data.user}
 					<span>{data.user.vip_status === 'active' ? 'VIP' : '账号'}</span>
@@ -315,7 +315,7 @@
 
 	<section class="hero">
 		<div class="hero-copy">
-			<p class="eyebrow">Baily's referral desk</p>
+			<p class="eyebrow">Liantang referral desk</p>
 			<h1>返现、开户、工具和好物推荐</h1>
 			<p class="lead">
 				把常用入口集中在一个干净的页面里，按分类筛选，快速找到返现网站、证券平台、支付工具、eSIM 和航空理赔等链接。
@@ -394,7 +394,7 @@
 					+ 新增分类
 				</button>
 			{/if}
-			<div class="wechat-card" aria-label="关注公众号贝利说TV">
+			<div class="wechat-card" aria-label="关注公众号莲塘导航">
 				<div class="wechat-qr" aria-hidden="true">
 					{#if wechatQr}
 						<img src={wechatQr} alt="" loading="lazy" />
@@ -407,8 +407,8 @@
 				</div>
 				<div>
 					<p>微信公众号</p>
-					<h3>贝利说TV</h3>
-					<span>欢迎微信搜索关注，一起了解更多实用信息和最新内容。</span>
+					<h3>莲塘导航</h3>
+					<span>占位二维码已生成，后续替换同名图片即可接入真实公众号。</span>
 				</div>
 			</div>
 		</aside>
@@ -485,7 +485,7 @@
 			{#each footerNotes as note}
 				<a href={'#' + note.id}>{note.label}</a>
 			{/each}
-			<a href="https://www.baily.life" target="_blank" rel="noreferrer">baily.life</a>
+			<a href="https://liantang.fun" target="_blank" rel="noreferrer">liantang.fun</a>
 		</footer>
 	</section>
 
@@ -514,7 +514,7 @@
 					<h2>{data.user ? '管理你的账号' : userMode === 'login' ? '登录你的账号' : '创建你的账号'}</h2>
 					<p>
 						{data.user
-							? '更新联系方式、开通 VIP，并同步到贝利统一会员中心。'
+							? '更新联系方式、开通 VIP，并同步到莲塘会员中心。'
 							: userMode === 'login'
 								? '输入邮箱和密码即可登录。'
 								: '填写邮箱和密码，开始同步你的会员权益。'}
@@ -524,7 +524,7 @@
 					<button class="auth-card-close" type="button" aria-label="关闭账号窗口" onclick={() => (showUserPanel = false)}>×</button>
 				{#if data.user}
 					<h2>推荐站账号</h2>
-					<p>一站登录，解锁并同步所有贝利网站精彩会员权益内容。</p>
+					<p>一站登录，解锁并同步莲塘导航会员权益内容。</p>
 					<div class="account-panel">
 						<span>{data.user.vip_status === 'active' ? 'VIP 用户' : '普通用户'}</span>
 						<strong>{data.user.display_name || data.user.email}</strong>
@@ -537,7 +537,7 @@
 						</label>
 						<label>
 							显示名称
-							<input name="display_name" value={data.user.display_name} placeholder="贝利朋友" />
+							<input name="display_name" value={data.user.display_name} placeholder="莲塘朋友" />
 						</label>
 						<label>
 							微信
@@ -561,7 +561,7 @@
 					</div>
 				{:else}
 					<h2>{userMode === 'login' ? '登录推荐站账号' : '注册推荐站账号'}</h2>
-					<p>一站登录，解锁并同步所有贝利网站精彩会员权益内容。</p>
+					<p>一站登录，解锁并同步莲塘导航会员权益内容。</p>
 					<div class="auth-switch auth-card-tabs" role="tablist" aria-label="账号模式">
 						<button type="button" class:active={userMode === 'register'} onclick={() => (userMode = 'register')}>
 							<strong>注册</strong>
@@ -592,7 +592,7 @@
 							</label>
 							<label>
 								显示名称
-								<input name="display_name" placeholder="贝利朋友" autocomplete="name" />
+								<input name="display_name" placeholder="莲塘朋友" autocomplete="name" />
 							</label>
 							<label>
 								密码
@@ -635,7 +635,7 @@
 		<div class="modal-backdrop" role="button" tabindex="0" aria-label="关闭提醒备注" onclick={(event) => { if (event.currentTarget === event.target) reminderSite = null; }} onkeydown={(event) => closeOnBackdropKey(event, () => (reminderSite = null))}>
 			<section class="modal reminder-modal" role="dialog" aria-modal="true" tabindex="-1">
 				<button class="modal-close" type="button" onclick={() => (reminderSite = null)}>×</button>
-				<p class="modal-eyebrow"><span aria-hidden="true">💡</span> 贝利提醒你哦</p>
+				<p class="modal-eyebrow"><span aria-hidden="true">💡</span> 莲塘提醒你哦</p>
 				<h2>{reminderSite.name}</h2>
 				<div class="reminder-note">
 					<span class="reminder-icon" aria-hidden="true">✨</span>

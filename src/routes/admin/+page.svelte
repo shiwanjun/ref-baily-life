@@ -17,14 +17,14 @@
 </script>
 
 <svelte:head>
-	<title>推荐管理 — ref.baily.life</title>
+	<title>推荐管理 — liantang.fun</title>
 </svelte:head>
 
 <main class="admin-shell">
 	<header class="admin-header">
 		<a href="/" class="back-link">← 返回前台</a>
 		<div>
-			<p>ref.baily.life</p>
+			<p>liantang.fun</p>
 			<h1>推荐管理</h1>
 		</div>
 		{#if data.loggedIn}
