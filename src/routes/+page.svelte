@@ -3,15 +3,25 @@
 	import { page } from '$app/stores';
 
 	export let data;
+	type SearchEngine = 'baidu' | 'google' | 'github' | 'stackoverflow' | null;
 
 	let searchQuery = '';
 	let activeCategory = 'all';
 	let selectedSite: typeof data.sites[0] | null = null;
-	let currentSearchEngine = null;
+	let currentSearchEngine: SearchEngine = null;
 	let activeQuickTag = '常用';
 
+	function getFallbackLogo(size: 48 | 64) {
+		return `https://via.placeholder.com/${size}`;
+	}
+
+	function handleImageError(event: Event, size: 48 | 64) {
+		const img = event.currentTarget as HTMLImageElement | null;
+		if (img) img.src = getFallbackLogo(size);
+	}
+
 	$: filteredSites = data.sites.filter((site) => {
-		if (site.hidden) return false;
+		if (site.hide) return false;
 		const matchesSearch =
 			!searchQuery ||
 			site.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -29,9 +39,9 @@
 		return acc;
 	}, {} as Record<string, typeof data.sites>);
 
-	$: featuredSites = data.sites.filter((s) => s.featured && !s.hidden);
+	$: featuredSites = data.sites.filter((s) => s.featured && !s.hide);
 
-	$: categories = ['all', ...Array.from(new Set(data.sites.filter((s) => !s.hidden).map((s) => s.category || '未分类')))];
+	$: categories = ['all', ...Array.from(new Set(data.sites.filter((s) => !s.hide).map((s) => s.category || '未分类')))];
 
 	$: sortedCategoryNames = Object.keys(groupedSites).sort((a, b) => {
 		const idxA = categories.indexOf(a);
@@ -117,16 +127,16 @@
 						type="text"
 						placeholder={currentSearchEngine ? `在${activeQuickTag}中搜索` : '搜索网站、工具、资源...'}
 						bind:value={searchQuery}
-						on:keydown={(e) => e.key === 'Enter' && currentSearchEngine && handleSearch()}
+						onkeydown={(e) => e.key === 'Enter' && currentSearchEngine && handleSearch()}
 					/>
 					{#if currentSearchEngine && searchQuery}
-						<button class="search-btn" on:click={handleSearch}>
+						<button class="search-btn" type="button" aria-label="执行站外搜索" onclick={handleSearch}>
 							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 								<path d="M11 16l-4-4m0 0l4-4m-4 4h14"/>
 							</svg>
 						</button>
 					{:else if searchQuery}
-						<button class="clear-btn" on:click={() => searchQuery = ''}>
+						<button class="clear-btn" type="button" aria-label="清空搜索词" onclick={() => searchQuery = ''}>
 							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 								<path d="M18 6L6 18M6 6l12 12"/>
 							</svg>
@@ -136,8 +146,8 @@
 			</div>
 
 			<div class="header-actions">
-				<a href="#" class="header-link">说明</a>
-				<a href="#" class="header-link">反馈</a>
+				<a href="#usage-note" class="header-link">说明</a>
+				<a href="mailto:hello@liantang.fun" class="header-link">反馈</a>
 				{#if $page.data.user}
 					<a href="/admin" class="header-btn primary">管理后台</a>
 				{:else}
@@ -158,7 +168,7 @@
 						{#each categories as category}
 							<button
 								class="nav-item {activeCategory === category ? 'active' : ''}"
-								on:click={() => handleCategoryClick(category)}
+								onclick={() => handleCategoryClick(category)}
 							>
 								<span class="nav-icon">
 									{#if category === 'all'}
@@ -177,9 +187,9 @@
 								<span class="nav-text">{category === 'all' ? '全部网站' : category}</span>
 								<span class="nav-count">
 									{#if category === 'all'}
-										{data.sites.filter(s => !s.hidden).length}
+										{data.sites.filter(s => !s.hide).length}
 									{:else}
-										{data.sites.filter(s => !s.hidden && s.category === category).length}
+										{data.sites.filter(s => !s.hide && s.category === category).length}
 									{/if}
 								</span>
 							</button>
@@ -190,7 +200,7 @@
 				<div class="sidebar-footer">
 					<div class="stats">
 						<div class="stat-item">
-							<span class="stat-value">{data.sites.filter(s => !s.hidden).length}</span>
+							<span class="stat-value">{data.sites.filter(s => !s.hide).length}</span>
 							<span class="stat-label">已收录</span>
 						</div>
 						<div class="stat-item">
@@ -215,19 +225,19 @@
 
 					<!-- 常用标签 -->
 					<div class="quick-tags">
-						<button class="quick-tag {activeQuickTag === '常用' ? 'active' : ''}" on:click={() => handleQuickTagClick('常用')}>
+						<button class="quick-tag {activeQuickTag === '常用' ? 'active' : ''}" type="button" onclick={() => handleQuickTagClick('常用')}>
 							常用
 						</button>
-						<button class="quick-tag {activeQuickTag === '百度' ? 'active' : ''}" on:click={() => handleQuickTagClick('百度')}>
+						<button class="quick-tag {activeQuickTag === '百度' ? 'active' : ''}" type="button" onclick={() => handleQuickTagClick('百度')}>
 							百度
 						</button>
-						<button class="quick-tag {activeQuickTag === 'Google' ? 'active' : ''}" on:click={() => handleQuickTagClick('Google')}>
+						<button class="quick-tag {activeQuickTag === 'Google' ? 'active' : ''}" type="button" onclick={() => handleQuickTagClick('Google')}>
 							Google
 						</button>
-						<button class="quick-tag {activeQuickTag === 'Github' ? 'active' : ''}" on:click={() => handleQuickTagClick('Github')}>
+						<button class="quick-tag {activeQuickTag === 'Github' ? 'active' : ''}" type="button" onclick={() => handleQuickTagClick('Github')}>
 							Github
 						</button>
-						<button class="quick-tag {activeQuickTag === 'Stack Overflow' ? 'active' : ''}" on:click={() => handleQuickTagClick('Stack Overflow')}>
+						<button class="quick-tag {activeQuickTag === 'Stack Overflow' ? 'active' : ''}" type="button" onclick={() => handleQuickTagClick('Stack Overflow')}>
 							Stack Overflow
 						</button>
 					</div>
@@ -239,17 +249,17 @@
 							class="banner-search-input"
 							placeholder={currentSearchEngine ? `在${activeQuickTag}中搜索...` : '搜索网站、工具、资源...'}
 							bind:value={searchQuery}
-							on:keydown={(e) => e.key === 'Enter' && currentSearchEngine && handleSearch()}
+							onkeydown={(e) => e.key === 'Enter' && currentSearchEngine && handleSearch()}
 						/>
 						{#if currentSearchEngine}
-							<button class="banner-search-btn" on:click={handleSearch}>
+							<button class="banner-search-btn" type="button" onclick={handleSearch}>
 								<svg class="search-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 									<path d="M11 16l-4-4m0 0l4-4m-4 4h14"/>
 								</svg>
 								搜索
 							</button>
 						{:else if searchQuery}
-							<button class="banner-search-btn" on:click={() => searchQuery = ''}>
+							<button class="banner-search-btn" type="button" aria-label="清空搜索词" onclick={() => searchQuery = ''}>
 								<svg class="search-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 									<path d="M18 6L6 18M6 6l12 12"/>
 								</svg>
@@ -261,12 +271,12 @@
 					<div class="hot-tags">
 						<span class="hot-label">🔥 热门搜索</span>
 						<div class="hot-tags-list">
-							<a class="hot-tag" on:click={() => searchQuery = 'AI'}>AI工具</a>
-							<a class="hot-tag" on:click={() => searchQuery = '设计'}>设计资源</a>
-							<a class="hot-tag" on:click={() => searchQuery = '开发'}>开发文档</a>
-							<a class="hot-tag" on:click={() => searchQuery = '灵感'}>设计灵感</a>
-							<a class="hot-tag" on:click={() => searchQuery = '配色'}>配色方案</a>
-							<a class="hot-tag" on:click={() => searchQuery = '图标'}>图标素材</a>
+							<button class="hot-tag" type="button" onclick={() => searchQuery = 'AI'}>AI工具</button>
+							<button class="hot-tag" type="button" onclick={() => searchQuery = '设计'}>设计资源</button>
+							<button class="hot-tag" type="button" onclick={() => searchQuery = '开发'}>开发文档</button>
+							<button class="hot-tag" type="button" onclick={() => searchQuery = '灵感'}>设计灵感</button>
+							<button class="hot-tag" type="button" onclick={() => searchQuery = '配色'}>配色方案</button>
+							<button class="hot-tag" type="button" onclick={() => searchQuery = '图标'}>图标素材</button>
 						</div>
 					</div>
 
@@ -292,14 +302,14 @@
 							<button
 								class="featured-card"
 								transition:fly={{ y: 20, opacity: 0, delay: i * 80, duration: 400 }}
-								on:click={() => selectedSite = site}
+								onclick={() => selectedSite = site}
 							>
 								<div class="featured-icon">
-									<img src={site.logo || 'https://via.placeholder.com/64'} alt={site.name} loading="lazy" on:error={(e) => (e.currentTarget.src = 'https://via.placeholder.com/64')} />
+									<img src={site.logo || getFallbackLogo(64)} alt={site.name} loading="lazy" onerror={(e) => handleImageError(e, 64)} />
 								</div>
 								<div class="featured-info">
 									<h3 class="featured-name">{site.name}</h3>
-									<p class="featured-desc">{site.description || site.catelog || '探索更多精彩内容'}</p>
+									<p class="featured-desc">{site.desc || site.catelog || '探索更多精彩内容'}</p>
 								</div>
 								<div class="featured-arrow">
 									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -327,14 +337,14 @@
 							<button
 								class="site-card"
 								transition:fly={{ y: 15, opacity: 0, delay: i * 30, duration: 300 }}
-								on:click={() => selectedSite = site}
+								onclick={() => selectedSite = site}
 							>
 								<div class="site-icon">
-									<img src={site.logo || 'https://via.placeholder.com/48'} alt={site.name} loading="lazy" on:error={(e) => (e.currentTarget.src = 'https://via.placeholder.com/48')} />
+									<img src={site.logo || getFallbackLogo(48)} alt={site.name} loading="lazy" onerror={(e) => handleImageError(e, 48)} />
 								</div>
 								<div class="site-info">
 									<h3 class="site-name">{site.name}</h3>
-									<p class="site-desc">{site.description || site.catelog || '发现更多精彩'}</p>
+									<p class="site-desc">{site.desc || site.catelog || '发现更多精彩'}</p>
 								</div>
 								<div class="site-arrow">
 									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -377,9 +387,9 @@
 
 	<!-- 网站详情弹窗 -->
 	{#if selectedSite}
-		<div class="modal-overlay" in:fade={{ duration: 200 }} on:click={() => selectedSite = null}>
-			<div class="modal" in:fly={{ y: 20, duration: 300 }} on:click|stopPropagation>
-				<button class="modal-close" on:click={() => selectedSite = null}>
+		<div class="modal-overlay" in:fade={{ duration: 200 }} role="button" tabindex="0" aria-label="关闭详情弹窗" onclick={() => selectedSite = null} onkeydown={(e) => (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ') && (selectedSite = null)}>
+			<div class="modal" in:fly={{ y: 20, duration: 300 }} role="dialog" aria-modal="true" aria-labelledby="site-modal-title" tabindex="-1" onclick={(event) => event.stopPropagation()} onkeydown={(event) => event.stopPropagation()}>
+				<button class="modal-close" type="button" aria-label="关闭详情弹窗" onclick={() => selectedSite = null}>
 					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 						<path d="M18 6L6 18M6 6l12 12"/>
 					</svg>
@@ -390,19 +400,19 @@
 						<img src={selectedSite.logo || 'https://via.placeholder.com/64'} alt={selectedSite.name} />
 					</div>
 					<div class="modal-title-wrap">
-						<h2 class="modal-title">{selectedSite.name}</h2>
+						<h2 class="modal-title" id="site-modal-title">{selectedSite.name}</h2>
 						<p class="modal-category">{selectedSite.category || '未分类'}</p>
 					</div>
 				</div>
 				
-				{#if selectedSite.description || selectedSite.catelog}
+				{#if selectedSite.desc || selectedSite.catelog}
 					<div class="modal-desc">
-						<p>{selectedSite.description || selectedSite.catelog}</p>
+						<p>{selectedSite.desc || selectedSite.catelog}</p>
 					</div>
 				{/if}
 				
 				<div class="modal-actions">
-					<button class="modal-btn cancel" on:click={() => selectedSite = null}>
+					<button class="modal-btn cancel" type="button" onclick={() => selectedSite = null}>
 						取消
 					</button>
 					<a 
@@ -410,7 +420,7 @@
 						target="_blank" 
 						rel="noopener noreferrer"
 						class="modal-btn confirm"
-						on:click={() => selectedSite = null}
+						onclick={() => selectedSite = null}
 					>
 						访问网站
 						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -488,11 +498,11 @@
 		box-sizing: border-box;
 	}
 
-	html {
+	:global(html) {
 		scroll-behavior: smooth;
 	}
 
-	body {
+	:global(body) {
 		font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
 		background: var(--bg-main);
 		color: var(--text-primary);

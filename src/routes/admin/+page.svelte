@@ -240,7 +240,7 @@
 							
 							{#if showCreateCategory}
 							<div class="create-category-panel">
-								<form method="POST" action="?/createCategory" class="category-form">
+								<div class="category-form">
 									<div class="cat-form-group">
 										<label for="new-cat-name">分类名称</label>
 										<input id="new-cat-name" name="categoryName" required placeholder="输入分类名称" />
@@ -255,9 +255,9 @@
 									</div>
 									<div class="cat-actions">
 										<button type="button" class="btn-secondary" onclick={() => showCreateCategory = false}>取消</button>
-										<button type="submit" class="btn-primary">创建分类</button>
+										<button type="submit" class="btn-primary" formaction="?/createCategory" formmethod="POST">创建分类</button>
 									</div>
-								</form>
+								</div>
 							</div>
 							{/if}
 						</div>
@@ -280,10 +280,10 @@
 						</div>
 						
 						<div class="form-group wide">
-							<label>Logo</label>
+							<label for="new-logo">Logo</label>
 							<div class="logo-upload-section">
 								<div class="logo-upload-area">
-									<input type="file" accept="image/*" on:change={(e) => handleImageUpload(e, 'new')} id="new-logo-file" />
+									<input type="file" accept="image/*" onchange={(e) => handleImageUpload(e, 'new')} id="new-logo-file" />
 									<label for="new-logo-file" class="upload-label">
 										<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 											<path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-5h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
@@ -294,7 +294,7 @@
 								{#if newLogoBase64}
 									<div class="logo-preview-box">
 										<img src={newLogoBase64} alt="Logo 预览" class="preview-img" />
-										<button type="button" class="clear-preview" onclick={() => newLogoBase64 = ''}>
+										<button type="button" class="clear-preview" aria-label="清除新推荐 Logo 预览" onclick={() => newLogoBase64 = ''}>
 											<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 												<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
 											</svg>
@@ -450,10 +450,10 @@
 										</div>
 										
 										<div class="form-group wide">
-											<label>Logo</label>
+											<label for="edit-logo-{site.id}">Logo</label>
 											<div class="logo-upload-section">
 												<div class="logo-upload-area">
-													<input type="file" accept="image/*" on:change={(e) => handleImageUpload(e, site.id)} id="edit-logo-file-{site.id}" />
+													<input type="file" accept="image/*" onchange={(e) => handleImageUpload(e, site.id)} id="edit-logo-file-{site.id}" />
 													<label for="edit-logo-file-{site.id}" class="upload-label">
 														<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 															<path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-5h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
@@ -464,15 +464,15 @@
 												{#if editLogoBase64[site.id]}
 													<div class="logo-preview-box">
 														<img src={editLogoBase64[site.id]} alt="Logo 预览" class="preview-img" />
-														<button type="button" class="clear-preview" onclick={() => delete editLogoBase64[site.id]}>
+														<button type="button" class="clear-preview" aria-label="清除 {site.name} Logo 预览" onclick={() => delete editLogoBase64[site.id]}>
 															<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 																<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
 															</svg>
 														</button>
 													</div>
-													<textarea name="logo" rows="2" bind:value={editLogoBase64[site.id]} placeholder="Logo URL 或 data:image base64"></textarea>
+													<textarea id="edit-logo-{site.id}" name="logo" rows="2" bind:value={editLogoBase64[site.id]} placeholder="Logo URL 或 data:image base64"></textarea>
 												{:else}
-													<textarea name="logo" rows="2">{site.logo}</textarea>
+													<textarea id="edit-logo-{site.id}" name="logo" rows="2">{site.logo}</textarea>
 												{/if}
 											</div>
 										</div>
@@ -1429,19 +1429,6 @@
 	.status-tag.featured {
 		background: #fef3c7;
 		color: #b45309;
-	}
-
-	details {
-		border-radius: 8px;
-		background: #f8fafc;
-		padding: 10px;
-	}
-
-	summary {
-		cursor: pointer;
-		color: #64748b;
-		font-size: 13px;
-		font-weight: 600;
 	}
 
 	.edit-actions {
