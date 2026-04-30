@@ -2,9 +2,9 @@
 	import { fly, fade } from 'svelte/transition';
 	import { page } from '$app/stores';
 	import type { CategoryNode, FlatCategoryNode, NavigationSite } from '$lib/navigation';
-	import type { PageData } from './$types';
+	import type { ActionData, PageData } from './$types';
 
-	let { data }: { data: PageData } = $props();
+	let { data, form }: { data: PageData; form: ActionData } = $props();
 
 	const allSites = $derived(data.sites as NavigationSite[]);
 	const visibleSites = $derived(allSites.filter((site) => !site.hide));
@@ -16,6 +16,8 @@
 	let selectedSite = $state<NavigationSite | null>(null);
 	let currentSearchEngine = $state<string | null>(null);
 	let activeQuickTag = $state('常用');
+	let authModalOpen = $state(false);
+	let authMode = $state<'login' | 'register'>('login');
 
 	const categoryById = $derived(new Map(categoryRows.map((category) => [category.id, category])));
 
@@ -159,6 +161,17 @@
 	function fallbackLogo(url: string) {
 		return `https://www.google.com/s2/favicons?sz=64&domain_url=${encodeURIComponent(url)}`;
 	}
+
+	function openAuthModal(mode: 'login' | 'register') {
+		authMode = mode;
+		authModalOpen = true;
+	}
+
+	$effect(() => {
+		if (form?.error) {
+			authModalOpen = true;
+		}
+	});
 </script>
 
 <svelte:head>
@@ -213,10 +226,16 @@
 			<div class="header-actions">
 				<a href="#site-footer" class="header-link">说明</a>
 				<a href="mailto:hello@liantang.fun" class="header-link">反馈</a>
-				{#if $page.data.user || $page.data.loggedIn}
-					<a href="/admin" class="header-btn primary">管理后台</a>
+				{#if $page.data.user}
+					<div class="header-user-chip">
+						<span class="header-user-name">{$page.data.user.display_name || $page.data.user.email}</span>
+					</div>
+					<form method="POST" action="?/logoutUser">
+						<button class="header-btn" type="submit">退出</button>
+					</form>
 				{:else}
-					<a href="/admin" class="header-btn primary">登录</a>
+					<button class="header-btn" type="button" onclick={() => openAuthModal('login')}>登录</button>
+					<button class="header-btn primary" type="button" onclick={() => openAuthModal('register')}>注册</button>
 				{/if}
 			</div>
 		</div>
@@ -563,6 +582,78 @@
 			</div>
 		</div>
 	{/if}
+
+	{#if authModalOpen}
+		<div
+			class="auth-modal-overlay"
+			in:fade={{ duration: 180 }}
+			role="button"
+			tabindex="0"
+			aria-label="关闭登录注册弹窗"
+			onclick={() => (authModalOpen = false)}
+			onkeydown={(event) => (event.key === 'Enter' || event.key === 'Escape') && (authModalOpen = false)}
+		>
+			<div
+				class="auth-modal"
+				in:fly={{ y: 18, duration: 220 }}
+				role="dialog"
+				aria-modal="true"
+				tabindex="-1"
+				onclick={(event) => event.stopPropagation()}
+				onkeydown={(event) => event.stopPropagation()}
+			>
+				<button class="auth-close" type="button" aria-label="关闭弹窗" onclick={() => (authModalOpen = false)}>
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<path d="M18 6L6 18M6 6l12 12"/>
+					</svg>
+				</button>
+
+				<div class="auth-tabs">
+					<button class:active={authMode === 'login'} type="button" onclick={() => (authMode = 'login')}>登录</button>
+					<button class:active={authMode === 'register'} type="button" onclick={() => (authMode = 'register')}>注册</button>
+				</div>
+
+				{#if form?.error}
+					<div class="auth-notice error">{form.error}</div>
+				{/if}
+				{#if form?.success}
+					<div class="auth-notice success">{form.success}</div>
+				{/if}
+
+				{#if authMode === 'login'}
+					<form class="auth-form" method="POST" action="?/loginUser">
+						<h3>登录推荐站账号</h3>
+						<label>
+							<span>邮箱</span>
+							<input name="email" type="email" placeholder="you@example.com" required />
+						</label>
+						<label>
+							<span>密码</span>
+							<input name="password" type="password" placeholder="请输入密码" required />
+						</label>
+						<button class="auth-submit" type="submit">登录</button>
+					</form>
+				{:else}
+					<form class="auth-form" method="POST" action="?/registerUser">
+						<h3>注册推荐站账号</h3>
+						<label>
+							<span>昵称</span>
+							<input name="display_name" type="text" placeholder="给自己取个名字" />
+						</label>
+						<label>
+							<span>邮箱</span>
+							<input name="email" type="email" placeholder="you@example.com" required />
+						</label>
+						<label>
+							<span>密码</span>
+							<input name="password" type="password" placeholder="至少 6 位" required minlength="6" />
+						</label>
+						<button class="auth-submit" type="submit">注册并登录</button>
+					</form>
+				{/if}
+			</div>
+		</div>
+	{/if}
 </div>
 
 <style>
@@ -853,6 +944,25 @@
 	.header-btn.primary:hover {
 		box-shadow: 0 6px 20px rgba(102, 126, 234, 0.45);
 		transform: translateY(-3px);
+	}
+
+	.header-user-chip {
+		display: inline-flex;
+		align-items: center;
+		max-width: 200px;
+		padding: var(--spacing-sm) var(--spacing-md);
+		border-radius: var(--radius-2xl);
+		background: rgba(102, 126, 234, 0.08);
+		border: 1px solid rgba(102, 126, 234, 0.14);
+	}
+
+	.header-user-name {
+		font-size: 0.88rem;
+		font-weight: 600;
+		color: var(--primary-color);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
 	/* ==================== 左侧分类导航 ==================== */
@@ -1895,6 +2005,160 @@
 		height: 18px;
 	}
 
+	.auth-modal-overlay {
+		position: fixed;
+		inset: 0;
+		background: rgba(15, 23, 42, 0.42);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: var(--spacing-md);
+		z-index: 1100;
+		backdrop-filter: blur(8px);
+	}
+
+	.auth-modal {
+		position: relative;
+		width: min(420px, 100%);
+		background: var(--bg-white);
+		border-radius: var(--radius-2xl);
+		padding: var(--spacing-xl);
+		box-shadow: var(--shadow-xl);
+	}
+
+	.auth-close {
+		position: absolute;
+		top: 14px;
+		right: 14px;
+		width: 36px;
+		height: 36px;
+		border: none;
+		border-radius: 999px;
+		background: var(--bg-main);
+		color: var(--text-secondary);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		cursor: pointer;
+		transition: all var(--transition-fast);
+	}
+
+	.auth-close:hover {
+		background: rgba(102, 126, 234, 0.1);
+		color: var(--primary-color);
+	}
+
+	.auth-close svg {
+		width: 16px;
+		height: 16px;
+	}
+
+	.auth-tabs {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 8px;
+		padding: 6px;
+		background: var(--bg-main);
+		border-radius: var(--radius-xl);
+		margin-bottom: var(--spacing-lg);
+	}
+
+	.auth-tabs button {
+		border: none;
+		background: transparent;
+		border-radius: var(--radius-lg);
+		padding: 10px 12px;
+		font-size: 0.92rem;
+		font-weight: 700;
+		color: var(--text-secondary);
+		cursor: pointer;
+		transition: all var(--transition-fast);
+	}
+
+	.auth-tabs button.active {
+		background: var(--bg-white);
+		color: var(--primary-color);
+		box-shadow: var(--shadow-sm);
+	}
+
+	.auth-form {
+		display: flex;
+		flex-direction: column;
+		gap: 14px;
+	}
+
+	.auth-form h3 {
+		font-size: 1.1rem;
+		font-weight: 700;
+		color: var(--text-primary);
+	}
+
+	.auth-form label {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+	}
+
+	.auth-form label span {
+		font-size: 0.82rem;
+		font-weight: 700;
+		color: var(--text-secondary);
+	}
+
+	.auth-form input {
+		width: 100%;
+		border: 1px solid var(--border-light);
+		border-radius: var(--radius-lg);
+		padding: 12px 14px;
+		font-size: 0.92rem;
+		color: var(--text-primary);
+		background: var(--bg-white);
+		outline: none;
+		transition: all var(--transition-fast);
+	}
+
+	.auth-form input:focus {
+		border-color: var(--primary-color);
+		box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+	}
+
+	.auth-submit {
+		margin-top: 4px;
+		border: none;
+		border-radius: var(--radius-xl);
+		padding: 12px 16px;
+		background: var(--primary-gradient);
+		color: white;
+		font-size: 0.95rem;
+		font-weight: 700;
+		cursor: pointer;
+		box-shadow: 0 4px 16px rgba(102, 126, 234, 0.28);
+		transition: transform 160ms ease, box-shadow 160ms ease;
+	}
+
+	.auth-submit:hover {
+		transform: translateY(-1px);
+		box-shadow: 0 8px 22px rgba(102, 126, 234, 0.32);
+	}
+
+	.auth-notice {
+		margin-bottom: var(--spacing-md);
+		padding: 10px 12px;
+		border-radius: var(--radius-lg);
+		font-size: 0.84rem;
+		font-weight: 600;
+	}
+
+	.auth-notice.error {
+		background: rgba(239, 68, 68, 0.08);
+		color: #dc2626;
+	}
+
+	.auth-notice.success {
+		background: rgba(34, 197, 94, 0.08);
+		color: #16a34a;
+	}
+
 	/* ==================== 动画 ==================== */
 	@keyframes fadeInUp {
 		from {
@@ -1949,6 +2213,10 @@
 		}
 
 		.header-link {
+			display: none;
+		}
+
+		.header-user-chip {
 			display: none;
 		}
 
@@ -2068,6 +2336,10 @@
 			flex-direction: column;
 			align-items: flex-start;
 			gap: var(--spacing-sm);
+		}
+
+		.auth-modal {
+			padding: var(--spacing-lg);
 		}
 	}
 
