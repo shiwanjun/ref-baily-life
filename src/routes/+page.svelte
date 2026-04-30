@@ -1,24 +1,64 @@
 <script lang="ts">
 	import { fly, fade } from 'svelte/transition';
 	import { page } from '$app/stores';
-	import type { NavigationSite } from '$lib/navigation';
+	import type { CategoryNode, FlatCategoryNode, NavigationSite } from '$lib/navigation';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
 
 	const allSites = $derived(data.sites as NavigationSite[]);
 	const visibleSites = $derived(allSites.filter((site) => !site.hide));
+	const categoryRows = $derived(data.categories as FlatCategoryNode[]);
+	const categoryTree = $derived(data.categoryTree as CategoryNode[]);
 
 	let searchQuery = $state('');
-	let activeCategory = $state('all');
+	let activeCategoryId = $state<number | null>(null);
 	let selectedSite = $state<NavigationSite | null>(null);
 	let currentSearchEngine = $state<string | null>(null);
 	let activeQuickTag = $state('常用');
 
-	const categories = $derived([
-		'all',
-		...Array.from(new Set(visibleSites.map((site) => site.category_path[0] || site.category || '未分类')))
-	]);
+	const categoryById = $derived(new Map(categoryRows.map((category) => [category.id, category])));
+
+	function buildDescendantMap(nodes: CategoryNode[]) {
+		const map = new Map<number, number[]>();
+
+		function walk(node: CategoryNode): number[] {
+			const ids = [node.id, ...node.children.flatMap((child) => walk(child))];
+			map.set(node.id, ids);
+			return ids;
+		}
+
+		nodes.forEach((node) => walk(node));
+		return map;
+	}
+
+	const descendantIdsByCategory = $derived(buildDescendantMap(categoryTree));
+
+	function resolveTopCategoryId(categoryId: number | null) {
+		if (!categoryId) return null;
+		let current = categoryById.get(categoryId) ?? null;
+		while (current?.parent_id) {
+			current = categoryById.get(current.parent_id) ?? current;
+		}
+		return current?.id ?? categoryId;
+	}
+
+	const activeCategory = $derived(activeCategoryId ? categoryById.get(activeCategoryId) ?? null : null);
+	const activeTopCategoryId = $derived(resolveTopCategoryId(activeCategoryId));
+	const activeCategoryName = $derived(activeCategory?.name ?? '全部网站');
+	const activeCategoryDescription = $derived(
+		activeCategory?.description || '按分类浏览站点，也可以直接使用搜索快速定位内容。'
+	);
+	const activeCategoryPath = $derived.by(() => {
+		if (!activeCategory) return [];
+		const path: string[] = [];
+		let current: FlatCategoryNode | undefined | null = activeCategory;
+		while (current) {
+			path.unshift(current.name);
+			current = current.parent_id ? categoryById.get(current.parent_id) : null;
+		}
+		return path;
+	});
 
 	const filteredSites = $derived(
 		visibleSites.filter((site) => {
@@ -27,8 +67,9 @@
 				`${site.name} ${site.desc} ${site.category_path.join(' ')} ${site.tags.join(' ')} ${site.normalized_domain}`
 					.toLowerCase()
 					.includes(searchQuery.toLowerCase());
-			const topCategory = site.category_path[0] || site.category || '未分类';
-			const matchesCategory = activeCategory === 'all' || topCategory === activeCategory;
+			const matchesCategory =
+				activeCategoryId == null ||
+				(descendantIdsByCategory.get(activeCategoryId) ?? [activeCategoryId]).includes(site.category_id);
 			return matchesSearch && matchesCategory;
 		})
 	);
@@ -36,10 +77,14 @@
 	const groupedSites = $derived.by(() => {
 		const output: Record<string, NavigationSite[]> = {};
 		for (const site of filteredSites) {
-			const key =
-				activeCategory === 'all'
-					? site.category_path[0] || site.category || '未分类'
-					: site.category_path.at(-1) || site.category || '未分类';
+			let key = site.category_path[0] || site.category || '未分类';
+			if (activeCategory?.level === 1) {
+				key = site.category_path[1] || site.category_path[0] || site.category || '未分类';
+			} else if (activeCategory?.level === 2) {
+				key = site.category_path[2] || site.category_path[1] || site.category || '未分类';
+			} else if (activeCategory?.level === 3) {
+				key = activeCategory.name;
+			}
 			if (!output[key]) output[key] = [];
 			output[key].push(site);
 		}
@@ -52,22 +97,26 @@
 
 	const sortedCategoryNames = $derived(
 		Object.keys(groupedSites).sort((a, b) => {
-			const idxA = categories.indexOf(a);
-			const idxB = categories.indexOf(b);
-			if (idxA !== -1 && idxB !== -1) return idxA - idxB;
-			if (idxA !== -1) return -1;
-			if (idxB !== -1) return 1;
 			return a.localeCompare(b, 'zh');
 		})
 	);
 
-	function handleCategoryClick(category: string) {
-		activeCategory = category;
+	function handleCategoryClick(categoryId: number | null) {
+		activeCategoryId = categoryId;
 	}
 
-	function categoryCount(category: string) {
-		if (category === 'all') return visibleSites.length;
-		return visibleSites.filter((site) => (site.category_path[0] || site.category || '未分类') === category).length;
+	function categoryCount(categoryId: number | null) {
+		if (categoryId == null) return visibleSites.length;
+		const ids = descendantIdsByCategory.get(categoryId) ?? [categoryId];
+		return visibleSites.filter((site) => ids.includes(site.category_id)).length;
+	}
+
+	function isCategoryActive(categoryId: number) {
+		return activeCategoryId === categoryId;
+	}
+
+	function isSubtreeOpen(categoryId: number) {
+		return activeTopCategoryId === categoryId;
 	}
 
 	function handleQuickTagClick(tag: string) {
@@ -181,34 +230,69 @@
 				<div class="sidebar-section">
 					<h3 class="sidebar-title">全部分类</h3>
 					<nav class="category-nav">
-						{#each categories as category}
-							<button
-								class="nav-item {activeCategory === category ? 'active' : ''}"
-								onclick={() => handleCategoryClick(category)}
-							>
-								<span class="nav-icon">
-									{#if category === 'all'}
-										<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-											<rect x="3" y="3" width="7" height="7"/>
-											<rect x="14" y="3" width="7" height="7"/>
-											<rect x="14" y="14" width="7" height="7"/>
-											<rect x="3" y="14" width="7" height="7"/>
-										</svg>
-									{:else}
+						<button
+							class="nav-item {activeCategoryId === null ? 'active' : ''}"
+							onclick={() => handleCategoryClick(null)}
+						>
+							<span class="nav-icon">
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<rect x="3" y="3" width="7" height="7"/>
+									<rect x="14" y="3" width="7" height="7"/>
+									<rect x="14" y="14" width="7" height="7"/>
+									<rect x="3" y="14" width="7" height="7"/>
+								</svg>
+							</span>
+							<span class="nav-text">全部网站</span>
+							<span class="nav-count">{categoryCount(null)}</span>
+						</button>
+
+						{#each categoryTree as topCategory}
+							<div class="nav-group">
+								<button
+									class="nav-item {isCategoryActive(topCategory.id) ? 'active' : ''}"
+									onclick={() => handleCategoryClick(topCategory.id)}
+								>
+									<span class="nav-icon">
 										<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 											<path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/>
 										</svg>
-									{/if}
-								</span>
-								<span class="nav-text">{category === 'all' ? '全部网站' : category}</span>
-								<span class="nav-count">
-									{#if category === 'all'}
-										{categoryCount('all')}
-									{:else}
-										{categoryCount(category)}
-									{/if}
-								</span>
-							</button>
+									</span>
+									<span class="nav-text">{topCategory.name}</span>
+									<span class="nav-count">{categoryCount(topCategory.id)}</span>
+								</button>
+
+								{#if isSubtreeOpen(topCategory.id)}
+									<div class="subnav-panel">
+										{#each topCategory.children as secondCategory}
+											<div class="subnav-group">
+												<button
+													class="subnav-item level-2 {isCategoryActive(secondCategory.id) ? 'active' : ''}"
+													onclick={() => handleCategoryClick(secondCategory.id)}
+												>
+													<span class="subnav-dot"></span>
+													<span class="subnav-text">{secondCategory.name}</span>
+													<span class="subnav-count">{categoryCount(secondCategory.id)}</span>
+												</button>
+
+												{#if secondCategory.children.length}
+													<div class="subnav-children">
+														{#each secondCategory.children as leafCategory}
+															<button
+																class="subnav-item level-3 {isCategoryActive(leafCategory.id) ? 'active' : ''}"
+																onclick={() => handleCategoryClick(leafCategory.id)}
+															>
+																<span class="subnav-dot"></span>
+																<span class="subnav-text">{leafCategory.name}</span>
+																<span class="subnav-count">{categoryCount(leafCategory.id)}</span>
+															</button>
+														{/each}
+													</div>
+												{/if}
+											</div>
+										{/each}
+									</div>
+								{/if}
+							</div>
 						{/each}
 					</nav>
 				</div>
@@ -220,7 +304,7 @@
 								<span class="stat-label">已收录</span>
 							</div>
 							<div class="stat-item">
-							<span class="stat-value">{categories.length - 1}</span>
+							<span class="stat-value">{categoryRows.length}</span>
 							<span class="stat-label">分类</span>
 						</div>
 					</div>
@@ -304,7 +388,7 @@
 			</section>
 
 			<!-- 精选推荐 -->
-			{#if featuredSites.length > 0 && activeCategory === 'all' && !currentSearchEngine && !searchQuery}
+			{#if featuredSites.length > 0 && activeCategoryId === null && !currentSearchEngine && !searchQuery}
 				<section class="featured-section" transition:fade={{ duration: 500, delay: 100 }}>
 					<div class="section-header">
 						<div class="section-title-wrap">
@@ -334,6 +418,22 @@
 								</div>
 							</button>
 						{/each}
+					</div>
+				</section>
+			{/if}
+
+			{#if activeCategoryId !== null}
+				<section class="active-category-summary" transition:fade={{ duration: 300 }}>
+					<div class="active-category-copy">
+						<p class="active-category-label">当前导航</p>
+						<h2>{activeCategoryName}</h2>
+						<p>{activeCategoryDescription}</p>
+					</div>
+					<div class="active-category-meta">
+						<span>{categoryCount(activeCategoryId)} 个站点</span>
+						{#if activeCategoryPath.length}
+							<span>{activeCategoryPath.join(' / ')}</span>
+						{/if}
 					</div>
 				</section>
 			{/if}
@@ -792,7 +892,13 @@
 	.category-nav {
 		display: flex;
 		flex-direction: column;
-		gap: 4px;
+		gap: 8px;
+	}
+
+	.nav-group {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
 	}
 
 	.nav-item {
@@ -865,6 +971,97 @@
 	.nav-item.active .nav-count {
 		background: var(--primary-gradient);
 		color: white;
+	}
+
+	.subnav-panel {
+		display: flex;
+		flex-direction: column;
+		gap: 10px;
+		margin-left: 12px;
+		padding: 6px 0 10px 14px;
+		border-left: 1px solid rgba(102, 126, 234, 0.14);
+	}
+
+	.subnav-group {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+	}
+
+	.subnav-children {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+		padding-left: 12px;
+	}
+
+	.subnav-item {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		width: 100%;
+		border: none;
+		background: transparent;
+		text-align: left;
+		border-radius: var(--radius-md);
+		padding: 8px 10px;
+		cursor: pointer;
+		transition: all var(--transition-fast);
+	}
+
+	.subnav-item:hover {
+		background: rgba(102, 126, 234, 0.06);
+	}
+
+	.subnav-item.active {
+		background: rgba(102, 126, 234, 0.1);
+	}
+
+	.subnav-item.level-2 {
+		font-weight: 600;
+	}
+
+	.subnav-item.level-3 {
+		padding-left: 8px;
+	}
+
+	.subnav-dot {
+		width: 7px;
+		height: 7px;
+		border-radius: 999px;
+		background: rgba(118, 75, 162, 0.4);
+		flex-shrink: 0;
+	}
+
+	.subnav-item.active .subnav-dot {
+		background: var(--primary-color);
+		box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.12);
+	}
+
+	.subnav-text {
+		flex: 1;
+		font-size: 0.86rem;
+		color: var(--text-secondary);
+		line-height: 1.35;
+	}
+
+	.subnav-item.active .subnav-text {
+		color: var(--primary-color);
+		font-weight: 700;
+	}
+
+	.subnav-count {
+		flex-shrink: 0;
+		font-size: 0.72rem;
+		color: var(--text-muted);
+		background: var(--bg-main);
+		padding: 3px 8px;
+		border-radius: 999px;
+	}
+
+	.subnav-item.active .subnav-count {
+		background: white;
+		color: var(--primary-color);
 	}
 
 	.sidebar-footer {
@@ -1170,6 +1367,55 @@
 	/* ==================== 精选推荐 ==================== */
 	.featured-section {
 		margin-bottom: var(--spacing-2xl);
+	}
+
+	.active-category-summary {
+		display: flex;
+		justify-content: space-between;
+		gap: var(--spacing-lg);
+		align-items: flex-end;
+		padding: var(--spacing-lg) var(--spacing-xl);
+		margin-bottom: var(--spacing-xl);
+		background: var(--bg-card);
+		border: 1px solid rgba(102, 126, 234, 0.14);
+		border-radius: var(--radius-2xl);
+		box-shadow: var(--shadow-sm);
+	}
+
+	.active-category-copy h2 {
+		font-size: 1.35rem;
+		font-weight: 700;
+		margin-bottom: 4px;
+	}
+
+	.active-category-copy p:last-child {
+		color: var(--text-secondary);
+		font-size: 0.92rem;
+	}
+
+	.active-category-label {
+		margin-bottom: 6px;
+		font-size: 0.72rem;
+		font-weight: 700;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+		color: var(--primary-color);
+	}
+
+	.active-category-meta {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: flex-end;
+		gap: 8px;
+	}
+
+	.active-category-meta span {
+		padding: 6px 12px;
+		border-radius: 999px;
+		background: var(--primary-gradient-soft);
+		color: var(--primary-color);
+		font-size: 0.8rem;
+		font-weight: 600;
 	}
 
 	.featured-grid {
@@ -1671,28 +1917,34 @@
 		}
 
 		.category-nav {
-			flex-direction: row;
-			overflow-x: auto;
 			gap: var(--spacing-sm);
-			padding-bottom: var(--spacing-xs);
-			scrollbar-width: none;
 		}
 
-		.category-nav::-webkit-scrollbar {
-			display: none;
+		.nav-group {
+			gap: 8px;
 		}
 
 		.nav-item {
-			flex-shrink: 0;
 			padding: var(--spacing-sm) var(--spacing-md);
 		}
 
-		.nav-icon {
-			display: none;
+		.subnav-panel {
+			margin-left: 8px;
+			padding-left: 12px;
 		}
 
-		.nav-count {
-			display: none;
+		.subnav-children {
+			padding-left: 8px;
+		}
+
+		.active-category-summary {
+			flex-direction: column;
+			align-items: flex-start;
+			padding: var(--spacing-md) var(--spacing-lg);
+		}
+
+		.active-category-meta {
+			justify-content: flex-start;
 		}
 
 		.sidebar-footer {
