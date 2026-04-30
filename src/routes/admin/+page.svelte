@@ -93,9 +93,10 @@
 
 <main class="admin-shell">
 	<header class="admin-topbar">
-		<div>
+		<div class="headline">
 			<p class="eyebrow">LT导航后台</p>
 			<h1>三级分类与站点管理台</h1>
+			<p class="headline-copy">保留现有三栏结构，把分类梳理、站点录入和导入任务放进更清晰的运营工作台里。</p>
 		</div>
 		<div class="topbar-actions">
 			<a class="ghost" href="/">查看前台</a>
@@ -215,7 +216,12 @@
 							<button class:selected={selectedSiteId === site.id} class="site-row" type="button" onclick={() => fillEditor(site)}>
 								<img alt={site.name} src={site.logo} />
 								<div>
-									<strong>{site.name}</strong>
+									<div class="site-row-title">
+										<strong>{site.name}</strong>
+										{#if site.featured}
+											<span class="flag">精选</span>
+										{/if}
+									</div>
 									<p>{site.desc}</p>
 									<small>{site.category_path.join(' / ')}</small>
 								</div>
@@ -371,8 +377,11 @@
 <style>
 	:global(body) {
 		margin: 0;
-		background: #f4f7fb;
-		color: #162033;
+		background:
+			radial-gradient(circle at top left, rgba(96, 181, 163, 0.14), transparent 22%),
+			radial-gradient(circle at top right, rgba(255, 197, 102, 0.14), transparent 28%),
+			#f5f3ee;
+		color: #1d2939;
 		font-family:
 			'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', -apple-system, BlinkMacSystemFont, sans-serif;
 	}
@@ -385,9 +394,11 @@
 	}
 
 	.admin-shell {
-		padding: 22px;
+		padding: 20px;
 		display: grid;
 		gap: 18px;
+		max-width: 1600px;
+		margin: 0 auto;
 	}
 
 	.admin-topbar,
@@ -395,23 +406,34 @@
 	.workspace,
 	.login-card,
 	.notice {
-		border-radius: 22px;
-		border: 1px solid #e0e6ef;
-		background: rgba(255, 255, 255, 0.96);
+		border-radius: 28px;
+		border: 1px solid rgba(216, 207, 188, 0.82);
+		background: rgba(255, 251, 245, 0.93);
+		box-shadow: 0 24px 60px -46px rgba(63, 50, 27, 0.34);
 	}
 
 	.admin-topbar {
-		padding: 22px 24px;
+		padding: 26px 28px;
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
 		gap: 16px;
 	}
 
+	.headline {
+		display: grid;
+		gap: 8px;
+	}
+
+	.headline-copy {
+		max-width: 760px;
+		color: #667085;
+	}
+
 	.eyebrow {
 		margin: 0 0 6px;
 		font-size: 0.75rem;
-		color: #5c6b82;
+		color: #91723b;
 		letter-spacing: 0.08em;
 		text-transform: uppercase;
 	}
@@ -434,8 +456,8 @@
 	.ghost,
 	.danger {
 		border: 0;
-		border-radius: 14px;
-		padding: 11px 14px;
+		border-radius: 999px;
+		padding: 11px 16px;
 		cursor: pointer;
 		text-decoration: none;
 		display: inline-flex;
@@ -444,18 +466,20 @@
 	}
 
 	.primary {
-		background: #173a66;
+		background: linear-gradient(135deg, #e9a43c, #cf7e1c);
 		color: #fff;
+		box-shadow: 0 18px 32px -22px rgba(207, 126, 28, 0.62);
 	}
 
 	.ghost {
-		background: #edf2f8;
-		color: #22314c;
+		background: rgba(255, 255, 255, 0.9);
+		color: #334155;
+		border: 1px solid rgba(214, 204, 184, 0.92);
 	}
 
 	.danger {
 		width: 100%;
-		background: #fff1f1;
+		background: #fff3f1;
 		color: #a03131;
 		margin-top: 12px;
 	}
@@ -465,8 +489,8 @@
 	}
 
 	.notice.success {
-		border-color: #cfe7d5;
-		background: #f4fbf6;
+		border-color: #cfe4d6;
+		background: #f6fbf7;
 	}
 
 	.notice.error {
@@ -475,7 +499,7 @@
 	}
 
 	.login-card {
-		padding: 28px;
+		padding: 32px;
 		max-width: 520px;
 	}
 
@@ -490,22 +514,24 @@
 	}
 
 	.status-strip {
-		padding: 16px 18px;
+		padding: 18px 20px;
 		display: grid;
 		grid-template-columns: repeat(4, minmax(0, 1fr));
 		gap: 12px;
 	}
 
 	.status-strip div {
-		padding: 12px 14px;
-		border-radius: 16px;
-		background: #f6f8fb;
+		padding: 16px;
+		border-radius: 20px;
+		background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(249, 246, 239, 0.94));
+		border: 1px solid rgba(223, 214, 196, 0.88);
 		display: grid;
 		gap: 4px;
 	}
 
 	.status-strip strong {
-		font-size: 1.3rem;
+		font-size: 1.5rem;
+		color: #1f4d66;
 	}
 
 	.status-strip span,
@@ -528,6 +554,7 @@
 		display: grid;
 		gap: 18px;
 		min-height: 0;
+		background: rgba(255, 251, 245, 0.5);
 	}
 
 	.left,
@@ -536,18 +563,21 @@
 	}
 
 	.panel {
-		border: 1px solid #e5eaf2;
-		border-radius: 20px;
-		padding: 16px;
+		border: 1px solid rgba(220, 211, 193, 0.86);
+		border-radius: 24px;
+		padding: 18px;
 		display: grid;
 		gap: 14px;
-		background: #fbfcfe;
+		background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(251, 247, 240, 0.96));
+		box-shadow: 0 16px 40px -34px rgba(60, 48, 27, 0.34);
 		min-height: 0;
 	}
 
 	.panel-head {
 		display: grid;
 		gap: 6px;
+		padding-bottom: 12px;
+		border-bottom: 1px dashed rgba(213, 202, 181, 0.9);
 	}
 
 	.category-tree,
@@ -568,9 +598,9 @@
 	}
 
 	.tree-button {
-		border: 1px solid #e1e6ef;
-		border-radius: 16px;
-		background: #fff;
+		border: 1px solid rgba(223, 214, 194, 0.88);
+		border-radius: 18px;
+		background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(250, 247, 241, 0.98));
 		padding: 12px;
 		text-align: left;
 		cursor: pointer;
@@ -587,7 +617,7 @@
 
 	.tree-button span {
 		font-size: 0.78rem;
-		color: #617189;
+		color: #8b94a3;
 	}
 
 	.tree-children {
@@ -620,20 +650,21 @@
 	textarea {
 		width: 100%;
 		box-sizing: border-box;
-		border: 1px solid #d5deea;
-		border-radius: 14px;
-		padding: 11px 12px;
-		background: #fff;
+		border: 1px solid rgba(214, 204, 184, 0.94);
+		border-radius: 16px;
+		padding: 12px 13px;
+		background: rgba(255, 255, 255, 0.94);
+		box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
 	}
 
 	.check {
 		display: flex;
 		align-items: center;
 		gap: 8px;
-		border: 1px solid #d5deea;
-		border-radius: 14px;
+		border: 1px solid rgba(214, 204, 184, 0.94);
+		border-radius: 16px;
 		padding: 11px 12px;
-		background: #fff;
+		background: rgba(255, 255, 255, 0.92);
 	}
 
 	.check input {
@@ -656,26 +687,43 @@
 		display: grid;
 		grid-template-columns: 42px minmax(0, 1fr);
 		gap: 12px;
-		padding: 12px;
-		border: 1px solid #e3e8f1;
-		border-radius: 16px;
-		background: #fff;
+		padding: 13px;
+		border: 1px solid rgba(221, 213, 195, 0.9);
+		border-radius: 18px;
+		background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(249, 246, 240, 0.96));
 		text-align: left;
 		cursor: pointer;
 	}
 
 	.site-row.selected {
-		border-color: #173a66;
-		box-shadow: 0 0 0 1px rgba(23, 58, 102, 0.12);
+		border-color: rgba(231, 169, 74, 0.92);
+		box-shadow:
+			0 0 0 1px rgba(231, 169, 74, 0.14),
+			0 18px 30px -26px rgba(231, 169, 74, 0.6);
 	}
 
 	.site-row img {
 		width: 42px;
 		height: 42px;
-		border-radius: 12px;
-		border: 1px solid #e2e8f0;
+		border-radius: 14px;
+		border: 1px solid rgba(223, 214, 194, 0.9);
 		background: #f8fafc;
 		object-fit: cover;
+	}
+
+	.site-row-title {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		flex-wrap: wrap;
+	}
+
+	.flag {
+		font-size: 0.72rem;
+		padding: 3px 8px;
+		border-radius: 999px;
+		background: #fff2d7;
+		color: #8d6114;
 	}
 
 	.site-row div,
@@ -703,12 +751,14 @@
 
 	.preview-box div {
 		padding: 12px;
-		border-radius: 16px;
-		background: #f3f7fb;
+		border-radius: 18px;
+		background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(247, 244, 237, 0.96));
+		border: 1px solid rgba(223, 214, 195, 0.86);
 	}
 
 	.preview-box strong {
 		font-size: 1.15rem;
+		color: #1f4d66;
 	}
 
 	.empty {
