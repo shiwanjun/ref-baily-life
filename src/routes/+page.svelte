@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { fly, fade } from 'svelte/transition';
+	import { tick } from 'svelte';
 	import { page } from '$app/stores';
 	import type { CategoryNode, FlatCategoryNode, NavigationSite } from '$lib/navigation';
 	import type { ActionData, PageData } from './$types';
@@ -18,6 +19,7 @@
 	let activeQuickTag = $state('常用');
 	let authModalOpen = $state(false);
 	let authMode = $state<'login' | 'register'>('login');
+	let mainContentElement: HTMLElement | null = null;
 
 	const categoryById = $derived(new Map(categoryRows.map((category) => [category.id, category])));
 
@@ -103,8 +105,13 @@
 		})
 	);
 
-	function handleCategoryClick(categoryId: number | null) {
+	async function handleCategoryClick(categoryId: number | null) {
 		activeCategoryId = categoryId;
+		await tick();
+		mainContentElement?.scrollTo({
+			top: 0,
+			behavior: 'smooth'
+		});
 	}
 
 	function categoryCount(categoryId: number | null) {
@@ -332,7 +339,7 @@
 		</aside>
 
 		<!-- 右侧内容区 -->
-		<main class="main-content">
+		<main class="main-content" bind:this={mainContentElement}>
 			<!-- 顶部横幅 -->
 			<section class="hero-banner" transition:fade={{ duration: 600 }}>
 				<div class="banner-inner">
