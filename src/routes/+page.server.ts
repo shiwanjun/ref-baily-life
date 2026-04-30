@@ -1,4 +1,3 @@
-import { buildTags, categoryNames, type CategoryName } from '$lib/ref-data';
 import { syncRefUserToCrm } from '$lib/server/crm';
 import { clearAdminCookie, isAdmin, setAdminCookie } from '$lib/server/auth';
 import { dbFromPlatform, listPublicSites } from '$lib/server/db';
@@ -41,43 +40,14 @@ function text(form: FormData, key: string) {
 	return String(form.get(key) ?? '').trim();
 }
 
-function intValue(form: FormData, key: string, fallback = 0) {
-	const parsed = Number.parseInt(text(form, key), 10);
-	return Number.isFinite(parsed) ? parsed : fallback;
-}
-
-function boolValue(form: FormData, key: string) {
-	return form.get(key) === 'on' || form.get(key) === '1';
-}
-
 function emailValue(form: FormData) {
 	return text(form, 'email').toLowerCase();
 }
 
-function tagsValue(form: FormData) {
-	return text(form, 'tags')
-		.split(/[,，\n]/)
-		.map((tag) => tag.trim())
-		.filter(Boolean)
-		.slice(0, 8);
-}
-
-function categoryValue(form: FormData) {
-	return text(form, 'category') || '数字服务与好物';
-}
-
 function requireDb(platform: App.Platform | undefined) {
 	const db = dbFromPlatform(platform);
-	if (!db) {
-		throw fail(500, { error: 'D1 数据库还没有绑定，暂时不能保存。' });
-	}
+	if (!db) throw fail(500, { error: 'D1 数据库还没有绑定，暂时不能保存。' });
 	return db;
-}
-
-async function requireInlineAdmin(cookies: Parameters<Actions[string]>[0]['cookies'], platform: App.Platform | undefined) {
-	if (!(await isAdmin(cookies, platform?.env))) {
-		throw fail(401, { error: '请先进入管理模式。' });
-	}
 }
 
 async function requireRefUser(
@@ -86,9 +56,7 @@ async function requireRefUser(
 ) {
 	const db = requireDb(platform);
 	const user = await currentRefUser(cookies, db, platform?.env);
-	if (!user) {
-		throw fail(401, { error: '请先登录推荐站账号。' });
-	}
+	if (!user) throw fail(401, { error: '请先登录推荐站账号。' });
 	return { db, user };
 }
 
@@ -206,101 +174,5 @@ export const actions: Actions = {
 			.run();
 		await syncRefUserToCrm(platform?.env, db, user.id, 'open_vip');
 		return { success: 'VIP 已开通并同步。' };
-	},
-
-	createCategory: async ({ request, cookies, platform }) => {
-		await requireInlineAdmin(cookies, platform);
-		const db = requireDb(platform);
-		const form = await request.formData();
-		const name = text(form, 'name');
-		if (!name) return fail(400, { error: '分类名称不能为空。' });
-
-		await db
-			.prepare(
-				`INSERT INTO categories (name, description, sort_order)
-				 VALUES (?, ?, ?)
-				 ON CONFLICT(name) DO UPDATE SET description = excluded.description, sort_order = excluded.sort_order, updated_at = CURRENT_TIMESTAMP`
-			)
-			.bind(name, text(form, 'description'), intValue(form, 'sort', 100))
-			.run();
-		return { success: '分类已保存。' };
-	},
-
-	createSite: async ({ request, cookies, platform }) => {
-		await requireInlineAdmin(cookies, platform);
-		const db = requireDb(platform);
-		const form = await request.formData();
-		const name = text(form, 'name');
-		const url = text(form, 'url');
-		if (!name) return fail(400, { error: '名称不能为空。' });
-		const fallbackTags = buildTags({
-			name,
-			url,
-			desc: text(form, 'desc'),
-			catelog: categoryValue(form)
-		});
-		const tags = tagsValue(form);
-
-		await db
-			.prepare(
-				`INSERT INTO sites
-				 (name, url, logo, catelog, description, sort_order, hidden, category, tags, featured)
-				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-			)
-			.bind(
-				name,
-				url,
-				text(form, 'logo'),
-				categoryValue(form),
-				text(form, 'desc'),
-				intValue(form, 'sort', 100),
-				boolValue(form, 'hidden') ? 1 : 0,
-				categoryValue(form),
-				JSON.stringify(tags.length ? tags : fallbackTags),
-				boolValue(form, 'featured') ? 1 : 0
-			)
-			.run();
-		return { success: '推荐已新增。' };
-	},
-
-	updateSite: async ({ request, cookies, platform }) => {
-		await requireInlineAdmin(cookies, platform);
-		const db = requireDb(platform);
-		const form = await request.formData();
-		const id = intValue(form, 'id');
-		if (!id) return fail(400, { error: '缺少推荐 ID。' });
-
-		await db
-			.prepare(
-				`UPDATE sites
-				 SET name = ?, url = ?, logo = ?, catelog = ?, description = ?, sort_order = ?,
-				     hidden = ?, category = ?, tags = ?, featured = ?, updated_at = CURRENT_TIMESTAMP
-				 WHERE id = ?`
-			)
-			.bind(
-				text(form, 'name'),
-				text(form, 'url'),
-				text(form, 'logo'),
-				categoryValue(form),
-				text(form, 'desc'),
-				intValue(form, 'sort', 100),
-				boolValue(form, 'hidden') ? 1 : 0,
-				categoryValue(form),
-				JSON.stringify(tagsValue(form)),
-				boolValue(form, 'featured') ? 1 : 0,
-				id
-			)
-			.run();
-		return { success: '推荐已保存。' };
-	},
-
-	removeSite: async ({ request, cookies, platform }) => {
-		await requireInlineAdmin(cookies, platform);
-		const db = requireDb(platform);
-		const form = await request.formData();
-		const id = intValue(form, 'id');
-		if (!id) return fail(400, { error: '缺少推荐 ID。' });
-		await db.prepare('DELETE FROM sites WHERE id = ?').bind(id).run();
-		return { success: '推荐已删除。' };
 	}
 };

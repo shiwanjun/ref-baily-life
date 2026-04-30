@@ -1,1658 +1,759 @@
 <script lang="ts">
-	import type { Site } from '$lib/ref-data';
+	import { slugify, type CategoryNode, type NavigationSite } from '$lib/navigation';
 	import type { ActionData, PageData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
+
+	const categoryRows = $derived(data.categoryRows);
+	const categoryTree = $derived(data.categoryTree as CategoryNode[]);
+	const leafCategories = $derived(categoryRows.filter((item) => item.level === 3));
+	const categoryNameById = $derived(new Map(categoryRows.map((item) => [item.id, item.name])));
+	const allSites = $derived(data.sites as NavigationSite[]);
+
 	let query = $state('');
-	let activeTab = $state<'list' | 'create'>('list');
-	let editingId = $state<number | null>(null);
-	let sortBy = $state<'name' | 'category' | 'sort' | 'updated'>('sort');
-	let filterCategory = $state<string>('all');
-	let showCreateCategory = $state(false);
-	let newLogoBase64 = $state('');
-	let editLogoBase64 = $state<Record<number, string>>({});
+	let selectedSiteId = $state<number | null>(null);
+	let selectedCategoryId = $state<number>(0);
+	let bookmarkHtml = $state('');
+	let sourceList = $state('');
+	let createLogoBase64 = $state('');
+	let editLogoBase64 = $state('');
 
-	const filteredSites = $derived(() => {
-		let sites = data.sites as Site[];
-		
-		if (filterCategory !== 'all') {
-			sites = sites.filter(s => s.category === filterCategory);
+	$effect(() => {
+		if (!selectedCategoryId) {
+			selectedCategoryId = leafCategories[0]?.id ?? 0;
 		}
-		
-		const keyword = query.trim().toLowerCase();
-		if (keyword) {
-			sites = sites.filter((site) =>
-				`${site.name} ${site.desc} ${site.url} ${site.category} ${site.tags.join(' ')}`
-					.toLowerCase()
-					.includes(keyword)
-			);
+		if (!sourceList && !data.seedSourceCount) {
+			sourceList = 'https://www.uxmap.cn/\nhttps://www.uisdc.com/nav\nhttps://deepdh.ai\nhttps://www.ainavpro.com/\nhttps://www.aigc.cn/tools';
 		}
-		
-		return sites.toSorted((a, b) => {
-			if (sortBy === 'name') return a.name.localeCompare(b.name, 'zh-Hans-CN');
-			if (sortBy === 'category') return a.category.localeCompare(b.category, 'zh-Hans-CN');
-			if (sortBy === 'sort') return a.sort - b.sort || a.id - b.id;
-			return a.id - b.id;
-		});
 	});
 
-	const stats = $derived(() => {
-		const sites = data.sites as Site[];
-		return {
-			total: sites.length,
-			visible: sites.filter(s => !s.hide).length,
-			hidden: sites.filter(s => s.hide).length,
-			featured: sites.filter(s => s.featured).length
-		};
-	});
+	const selectedSite = $derived(
+		selectedSiteId == null ? null : allSites.find((site) => site.id === selectedSiteId) ?? null
+	);
 
-	function startEdit(id: number) {
-		editingId = id;
-		activeTab = 'list';
+	const filteredSites = $derived(
+		allSites.filter((site) => {
+			const text = `${site.name} ${site.desc} ${site.url} ${site.category_path.join(' ')} ${site.tags.join(' ')}`.toLowerCase();
+			const matchesQuery = !query.trim() || text.includes(query.trim().toLowerCase());
+			const matchesCategory = !selectedCategoryId || site.category_id === selectedCategoryId;
+			return matchesQuery && matchesCategory;
+		})
+	);
+
+	function defaultCategoryId() {
+		return selectedSite?.category_id ?? selectedCategoryId ?? leafCategories[0]?.id ?? 0;
 	}
 
-	function cancelEdit() {
-		editingId = null;
-	}
-
-	async function handleImageUpload(event: Event, target: 'new' | number) {
-		const file = (event.target as HTMLInputElement).files?.[0];
+	function handleCreateUpload(event: Event) {
+		const file = (event.currentTarget as HTMLInputElement).files?.[0];
 		if (!file) return;
-
 		const reader = new FileReader();
-		reader.onload = (e) => {
-			const result = e.target?.result as string;
-			if (target === 'new') {
-				newLogoBase64 = result;
-			} else {
-				editLogoBase64[target] = result;
-			}
-		};
+		reader.onload = () => (createLogoBase64 = String(reader.result ?? ''));
 		reader.readAsDataURL(file);
+	}
+
+	function handleEditUpload(event: Event) {
+		const file = (event.currentTarget as HTMLInputElement).files?.[0];
+		if (!file) return;
+		const reader = new FileReader();
+		reader.onload = () => (editLogoBase64 = String(reader.result ?? ''));
+		reader.readAsDataURL(file);
+	}
+
+	function fillEditor(site: NavigationSite) {
+		selectedSiteId = site.id;
+		selectedCategoryId = site.category_id;
+		editLogoBase64 = site.logo;
 	}
 </script>
 
 <svelte:head>
-	<title>推荐管理 — liantang.fun</title>
+	<title>LT导航后台</title>
 </svelte:head>
 
-<main class="admin-shell">
-	<header class="admin-header">
-		<div class="header-brand">
-			<a href="/" class="back-link">
-				<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-					<path d="M19 12H5M12 19l-7-7 7-7"/>
-				</svg>
-				返回前台
-			</a>
-			<div class="brand-info">
-				<span class="brand-label">liantang.fun</span>
-				<h1>推荐管理</h1>
+{#snippet categoryItem(node: CategoryNode)}
+	<div class="tree-item">
+		<button class="tree-button" type="button" onclick={() => selectedCategoryId = node.level === 3 ? node.id : selectedCategoryId}>
+			<div>
+				<strong>{node.name}</strong>
+				<span>L{node.level}</span>
 			</div>
-		</div>
-		{#if data.loggedIn}
-			<div class="header-actions">
-				<span class="status-badge">已登录</span>
-				<form method="POST" action="?/logout">
-					<button class="ghost-button" type="submit">退出</button>
-				</form>
+			<small>{node.description}</small>
+		</button>
+
+		{#if node.children.length}
+			<div class="tree-children">
+				{#each node.children as child}
+					{@render categoryItem(child)}
+				{/each}
 			</div>
 		{/if}
+	</div>
+{/snippet}
+
+<main class="admin-shell">
+	<header class="admin-topbar">
+		<div>
+			<p class="eyebrow">LT导航后台</p>
+			<h1>三级分类与站点管理台</h1>
+		</div>
+		<div class="topbar-actions">
+			<a class="ghost" href="/">查看前台</a>
+			{#if data.loggedIn}
+				<form method="POST" action="?/logout">
+					<button class="primary" type="submit">退出</button>
+				</form>
+			{/if}
+		</div>
 	</header>
 
 	{#if form?.error}
-		<div class="notice error">
-			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-				<circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6M9 9l6 6"/>
-			</svg>
-			{form.error}
-		</div>
+		<div class="notice error">{form.error}</div>
 	{/if}
 	{#if form?.success}
-		<div class="notice success">
-			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-				<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4 12 14.01l-3-3"/>
-			</svg>
-			{form.success}
-		</div>
+		<div class="notice success">{form.success}</div>
 	{/if}
 
 	{#if !data.loggedIn}
-		<section class="login-panel">
-			<div class="login-content">
-				<div class="login-icon">
-					<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-						<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-					</svg>
-				</div>
-				<h2>管理员登录</h2>
-				<p>
-					{data.configured 
-						? '输入管理密码后可以新增、编辑、隐藏和删除推荐链接。' 
-						: '还没有配置 ADMIN_PASSWORD，后台暂时不能登录。'}
-				</p>
-				<form method="POST" action="?/login" class="login-form">
-					<div class="input-group">
-						<input name="password" type="password" placeholder="输入管理密码" required />
-						<button type="submit">
-							<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-								<path d="M5 12h14M12 5l7 7-7 7"/>
-							</svg>
-							登录
-						</button>
-					</div>
-				</form>
-			</div>
+		<section class="login-card">
+			<h2>管理员登录</h2>
+			<p>{data.configured ? '输入后台密码后继续管理分类、站点和导入任务。' : '当前环境还没有配置 ADMIN_PASSWORD。'}</p>
+			<form class="login-form" method="POST" action="?/login">
+				<input name="password" type="password" placeholder="后台密码" required />
+				<button class="primary" type="submit">登录</button>
+			</form>
 		</section>
 	{:else if !data.hasDb}
-		<section class="login-panel">
-			<div class="login-content">
-				<div class="login-icon warning">
-					<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-						<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-						<line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
-					</svg>
-				</div>
-				<h2>D1 还没有绑定</h2>
-				<p>当前环境没有 DB binding。绑定 D1 后，这个后台就可以管理线上推荐内容。</p>
-			</div>
+		<section class="login-card">
+			<h2>D1 尚未绑定</h2>
+			<p>当前环境没有数据库 binding，后台无法保存数据。</p>
 		</section>
 	{:else}
-		<section class="stats-grid">
-			<div class="stat-card">
-				<div class="stat-value">{stats().total}</div>
-				<div class="stat-label">总推荐数</div>
-			</div>
-			<div class="stat-card">
-				<div class="stat-value success">{stats().visible}</div>
-				<div class="stat-label">已显示</div>
-			</div>
-			<div class="stat-card">
-				<div class="stat-value muted">{stats().hidden}</div>
-				<div class="stat-label">已隐藏</div>
-			</div>
-			<div class="stat-card">
-				<div class="stat-value featured">{stats().featured}</div>
-				<div class="stat-label">精选推荐</div>
-			</div>
+		<section class="status-strip">
+			<div><strong>{categoryRows.filter((item) => item.level === 1).length}</strong><span>大类</span></div>
+			<div><strong>{categoryRows.filter((item) => item.level === 2).length}</strong><span>中类</span></div>
+			<div><strong>{leafCategories.length}</strong><span>小类</span></div>
+			<div><strong>{data.sites.length}</strong><span>站点</span></div>
 		</section>
 
-		<section class="action-bar">
-			<div class="tabs">
-				<button 
-					class="tab" 
-					class:active={activeTab === 'list'}
-					onclick={() => activeTab = 'list'}
-				>
-					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-						<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/>
-						<line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
-					</svg>
-					推荐列表
-				</button>
-				<button 
-					class="tab primary" 
-					class:active={activeTab === 'create'}
-					onclick={() => { activeTab = 'create'; editingId = null; }}
-				>
-					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-						<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-					</svg>
-					新增推荐
-				</button>
-			</div>
-		</section>
-
-		{#if activeTab === 'create'}
-			<section class="create-panel">
-				<form method="POST" action="?/create" class="editor-form">
-					<div class="form-header">
-						<h2>添加新推荐</h2>
-						<p>填写推荐信息，创建新的推荐链接</p>
+		<div class="workspace">
+			<aside class="column left">
+				<section class="panel">
+					<div class="panel-head">
+						<h2>分类树</h2>
+						<p>左侧负责新增与梳理三级分类。</p>
 					</div>
-					
-					<div class="form-grid">
-						<div class="form-group wide">
-							<label for="new-name">名称 <span class="required">*</span></label>
-							<input id="new-name" name="name" required placeholder="例如：Rakuten 乐天返利网" />
-						</div>
-						
-						<div class="form-group wide">
-							<label for="new-url">链接地址</label>
-							<input id="new-url" name="url" placeholder="https://..." />
-						</div>
-						
-						<div class="form-group">
-							<div class="label-row">
-								<label for="new-category">分类</label>
-								<button type="button" class="add-cat-btn" onclick={() => showCreateCategory = !showCreateCategory}>
-									<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-										<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-									</svg>
-									新增
-								</button>
-							</div>
-							<select id="new-category" name="category">
-								{#each data.categories as category}
-									<option value={category}>{category}</option>
+					<div class="category-tree">
+						{#each categoryTree as node}
+							{@render categoryItem(node)}
+						{/each}
+					</div>
+				</section>
+
+				<section class="panel">
+					<div class="panel-head">
+						<h2>新增分类</h2>
+						<p>按级别创建，大类不选父级，中类挂大类，小类挂中类。</p>
+					</div>
+					<form class="stack-form" method="POST" action="?/createCategoryNode">
+						<label>
+							<span>分类名称</span>
+							<input name="name" placeholder="例如：AI设计" required />
+						</label>
+						<label>
+							<span>Slug</span>
+							<input name="slug" placeholder="可留空自动生成" />
+						</label>
+						<label>
+							<span>级别</span>
+							<select name="level">
+								<option value="1">一级大类</option>
+								<option value="2">二级中类</option>
+								<option value="3" selected>三级小类</option>
+							</select>
+						</label>
+						<label>
+							<span>父分类</span>
+							<select name="parent_id">
+								<option value="">无</option>
+								{#each categoryRows as category}
+									<option value={category.id}>{category.name} · L{category.level}</option>
 								{/each}
 							</select>
-							
-							{#if showCreateCategory}
-							<div class="create-category-panel">
-								<div class="category-form">
-									<div class="cat-form-group">
-										<label for="new-cat-name">分类名称</label>
-										<input id="new-cat-name" name="categoryName" required placeholder="输入分类名称" />
-									</div>
-									<div class="cat-form-group">
-										<label for="new-cat-desc">描述（可选）</label>
-										<input id="new-cat-desc" name="categoryDesc" placeholder="分类描述" />
-									</div>
-									<div class="cat-form-group">
-										<label for="new-cat-sort">排序</label>
-										<input id="new-cat-sort" name="categorySort" type="number" value="100" />
-									</div>
-									<div class="cat-actions">
-										<button type="button" class="btn-secondary" onclick={() => showCreateCategory = false}>取消</button>
-										<button type="submit" class="btn-primary" formaction="?/createCategory" formmethod="POST">创建分类</button>
-									</div>
-								</div>
-							</div>
-							{/if}
-						</div>
-						
-						<div class="form-group">
-							<label for="new-sort">排序权重</label>
-							<input id="new-sort" name="sort" type="number" value="100" />
-							<span class="hint">数字越小越靠前</span>
-						</div>
-						
-						<div class="form-group wide">
-							<label for="new-desc">提醒备注</label>
-							<input id="new-desc" name="desc" placeholder="奖励、注意事项或一句介绍" />
-						</div>
-						
-						<div class="form-group wide">
-							<label for="new-tags">标签</label>
-							<input id="new-tags" name="tags" placeholder="美国, 开户奖励, 注意条件" />
-							<span class="hint">用逗号分隔，最多 8 个</span>
-						</div>
-						
-						<div class="form-group wide">
-							<label for="new-logo">Logo</label>
-							<div class="logo-upload-section">
-								<div class="logo-upload-area">
-									<input type="file" accept="image/*" onchange={(e) => handleImageUpload(e, 'new')} id="new-logo-file" />
-									<label for="new-logo-file" class="upload-label">
-										<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-											<path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-5h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-										</svg>
-										<span>点击或拖拽上传图片</span>
-									</label>
-								</div>
-								{#if newLogoBase64}
-									<div class="logo-preview-box">
-										<img src={newLogoBase64} alt="Logo 预览" class="preview-img" />
-										<button type="button" class="clear-preview" aria-label="清除新推荐 Logo 预览" onclick={() => newLogoBase64 = ''}>
-											<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-												<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-											</svg>
-										</button>
-									</div>
-									<textarea id="new-logo" name="logo" rows="2" bind:value={newLogoBase64} placeholder="或粘贴 Logo URL 或 data:image base64"></textarea>
-								{:else}
-									<textarea id="new-logo" name="logo" rows="2" placeholder="或粘贴 Logo URL 或 data:image base64"></textarea>
-								{/if}
-							</div>
-						</div>
-						
-						<div class="form-group wide">
-							<div class="checkbox-group">
-								<label class="checkbox-label">
-									<input name="featured" type="checkbox" />
-									<span class="checkbox-custom"></span>
-									标记为精选
-								</label>
-								<label class="checkbox-label">
-									<input name="hidden" type="checkbox" />
-									<span class="checkbox-custom"></span>
-									隐藏此推荐
-								</label>
-							</div>
-						</div>
+						</label>
+						<label>
+							<span>描述</span>
+							<textarea name="description" rows="3" placeholder="简要说明用途"></textarea>
+						</label>
+						<label>
+							<span>排序</span>
+							<input name="sort" type="number" value="100" />
+						</label>
+						<button class="primary" type="submit">创建分类</button>
+					</form>
+				</section>
+			</aside>
+
+			<section class="column middle">
+				<section class="panel">
+					<div class="panel-head">
+						<h2>站点列表</h2>
+						<p>中间负责检索、筛选和浏览已有内容。</p>
 					</div>
-					
-					<div class="form-actions">
-						<button type="button" class="btn-secondary" onclick={() => activeTab = 'list'}>取消</button>
-						<button type="submit" class="btn-primary">
-							<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-								<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-							</svg>
-							创建推荐
-						</button>
-					</div>
-				</form>
-			</section>
-		{:else}
-			<section class="filter-bar">
-				<div class="search-box">
-					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-						<circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
-					</svg>
-					<input bind:value={query} type="search" placeholder="搜索名称、分类、标签..." />
-					{#if query}
-						<button class="clear-btn" aria-label="清除搜索" onclick={() => query = ''}>
-							<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-								<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-							</svg>
-						</button>
-					{/if}
-				</div>
-				
-				<div class="filter-controls">
-					<div class="select-wrapper">
-						<select bind:value={filterCategory}>
-							<option value="all">全部分类</option>
-							{#each data.categories as category}
-								<option value={category}>{category}</option>
+					<div class="filters">
+						<input bind:value={query} type="search" placeholder="搜索名称、描述、标签、分类" />
+						<select bind:value={selectedCategoryId}>
+							<option value={0}>全部三级分类</option>
+							{#each leafCategories as category}
+							<option value={category.id}>{category.name}</option>
 							{/each}
 						</select>
+						<button class="ghost" type="button" onclick={() => selectedSiteId = null}>新建站点</button>
 					</div>
-					
-					<div class="select-wrapper">
-						<select bind:value={sortBy}>
-							<option value="sort">按排序</option>
-							<option value="name">按名称</option>
-							<option value="category">按分类</option>
-						</select>
+					<div class="site-list">
+						{#each filteredSites as site}
+							<button class:selected={selectedSiteId === site.id} class="site-row" type="button" onclick={() => fillEditor(site)}>
+								<img alt={site.name} src={site.logo} />
+								<div>
+									<strong>{site.name}</strong>
+									<p>{site.desc}</p>
+									<small>{site.category_path.join(' / ')}</small>
+								</div>
+							</button>
+						{/each}
+						{#if !filteredSites.length}
+							<div class="empty">当前筛选条件下没有站点。</div>
+						{/if}
 					</div>
-				</div>
+				</section>
+
+				<section class="panel">
+					<div class="panel-head">
+						<h2>导入区</h2>
+						<p>支持内置种子、书签 HTML 和导航源抓取三种方式。</p>
+					</div>
+					<div class="import-grid">
+						<form class="stack-form compact" method="POST" action="?/previewSeedImport">
+							<h3>内置种子</h3>
+							<p>当前内置 {data.seedSummary.totalSites} 条站点，来源 {data.seedSourceCount} 个种子源。</p>
+							<div class="button-row">
+								<button class="ghost" type="submit">预览统计</button>
+								<button class="primary" type="submit" formaction="?/replaceSeedImport">覆盖导入</button>
+							</div>
+						</form>
+
+						<form class="stack-form compact" method="POST" action="?/previewBookmarkImport">
+							<h3>书签 HTML</h3>
+							<textarea bind:value={bookmarkHtml} name="bookmark_html" rows="7" placeholder="粘贴浏览器导出的 Netscape 书签 HTML"></textarea>
+							<div class="button-row">
+								<button class="ghost" type="submit">预览导入</button>
+								<button class="primary" type="submit" formaction="?/replaceBookmarkImport">覆盖导入</button>
+							</div>
+						</form>
+
+						<form class="stack-form compact" method="POST" action="?/crawlNavigationSources">
+							<h3>导航源抓取</h3>
+							<textarea bind:value={sourceList} name="source_list" rows="7" placeholder="每行一个导航源 URL"></textarea>
+							<div class="button-row">
+								<button class="ghost" type="submit">抓取预览</button>
+								<button class="primary" type="submit" name="mode" value="replace">抓取并覆盖</button>
+							</div>
+						</form>
+					</div>
+
+					{#if form?.importPreview}
+						<div class="preview-box">
+							<div><strong>{form.importPreview.totalInput}</strong><span>输入条数</span></div>
+							<div><strong>{form.importPreview.totalSites}</strong><span>有效站点</span></div>
+							<div><strong>{form.importPreview.navigationSources}</strong><span>导航源</span></div>
+							<div><strong>{form.importPreview.deduped}</strong><span>去重</span></div>
+							<div><strong>{form.importPreview.skipped}</strong><span>剔除</span></div>
+							<div><strong>{form.importPreview.failed}</strong><span>失败</span></div>
+						</div>
+					{/if}
+				</section>
 			</section>
 
-			<section class="site-list">
-				{#if filteredSites().length === 0}
-					<div class="empty-state">
-						<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
-							<circle cx="12" cy="12" r="10"/><path d="M16 16s-1.5-2-4-2-4 2-4 2M9 9h.01M15 9h.01"/>
-						</svg>
-						<p>没有找到匹配的推荐</p>
-						<button class="btn-secondary" onclick={() => { query = ''; filterCategory = 'all'; }}>清除筛选</button>
+			<aside class="column right">
+				<section class="panel">
+					<div class="panel-head">
+						<h2>{selectedSite ? '编辑站点' : '新增站点'}</h2>
+						<p>右侧负责当前卡片的详细编辑，减少来回滚动。</p>
 					</div>
-				{:else}
-					{#each filteredSites() as site, index (site.id)}
-						<article class="site-card" class:hidden={site.hide} class:featured={site.featured} class:editing={editingId === site.id} style="animation-delay: {Math.min(index * 40, 400)}ms">
-							{#if editingId === site.id}
-								<form method="POST" action="?/update" class="edit-form">
-									<input type="hidden" name="id" value={site.id} />
-									
-									<div class="edit-header">
-										<div class="site-preview">
-											<div class="logo-preview">
-												{#if site.logo?.startsWith('data:') || site.logo?.startsWith('http')}
-													<img src={site.logo} alt="" />
-												{:else}
-													<span>{site.name.slice(0, 1)}</span>
-												{/if}
-											</div>
-											<div class="site-info">
-												<span class="site-id">ID: {site.id}</span>
-												<span class="site-status">
-													{#if site.hide}
-														<span class="status-tag hidden">已隐藏</span>
-													{/if}
-													{#if site.featured}
-														<span class="status-tag featured">精选</span>
-													{/if}
-												</span>
-											</div>
-										</div>
-										<button type="button" class="btn-icon" aria-label="取消编辑" onclick={cancelEdit}>
-											<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-												<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-											</svg>
-										</button>
-									</div>
-									
-									<div class="form-grid compact">
-										<div class="form-group">
-											<label for="edit-name-{site.id}">名称</label>
-											<input id="edit-name-{site.id}" name="name" value={site.name} required />
-										</div>
-										
-										<div class="form-group">
-											<label for="edit-url-{site.id}">链接</label>
-											<input id="edit-url-{site.id}" name="url" value={site.url} />
-										</div>
-										
-										<div class="form-group">
-											<label for="edit-category-{site.id}">分类</label>
-											<select id="edit-category-{site.id}" name="category">
-												{#each data.categories as category}
-													<option value={category} selected={category === site.category}>{category}</option>
-												{/each}
-											</select>
-										</div>
-										
-										<div class="form-group">
-											<label for="edit-sort-{site.id}">排序</label>
-											<input id="edit-sort-{site.id}" name="sort" type="number" value={site.sort} />
-										</div>
-										
-										<div class="form-group wide">
-											<label for="edit-desc-{site.id}">备注</label>
-											<input id="edit-desc-{site.id}" name="desc" value={site.desc} />
-										</div>
-										
-										<div class="form-group wide">
-											<label for="edit-tags-{site.id}">标签</label>
-											<input id="edit-tags-{site.id}" name="tags" value={site.tags.join(', ')} />
-										</div>
-										
-										<div class="form-group wide">
-											<label for="edit-logo-{site.id}">Logo</label>
-											<div class="logo-upload-section">
-												<div class="logo-upload-area">
-													<input type="file" accept="image/*" onchange={(e) => handleImageUpload(e, site.id)} id="edit-logo-file-{site.id}" />
-													<label for="edit-logo-file-{site.id}" class="upload-label">
-														<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-															<path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-5h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-														</svg>
-														<span>点击上传新图片</span>
-													</label>
-												</div>
-												{#if editLogoBase64[site.id]}
-													<div class="logo-preview-box">
-														<img src={editLogoBase64[site.id]} alt="Logo 预览" class="preview-img" />
-														<button type="button" class="clear-preview" aria-label="清除 {site.name} Logo 预览" onclick={() => delete editLogoBase64[site.id]}>
-															<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-																<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-															</svg>
-														</button>
-													</div>
-													<textarea id="edit-logo-{site.id}" name="logo" rows="2" bind:value={editLogoBase64[site.id]} placeholder="Logo URL 或 data:image base64"></textarea>
-												{:else}
-													<textarea id="edit-logo-{site.id}" name="logo" rows="2">{site.logo}</textarea>
-												{/if}
-											</div>
-										</div>
-										
-										<div class="form-group wide">
-											<div class="checkbox-group">
-												<label class="checkbox-label">
-													<input name="featured" type="checkbox" checked={Boolean(site.featured)} />
-													<span class="checkbox-custom"></span>
-													精选
-												</label>
-												<label class="checkbox-label">
-													<input name="hidden" type="checkbox" checked={Boolean(site.hide)} />
-													<span class="checkbox-custom"></span>
-													隐藏
-												</label>
-											</div>
-										</div>
-									</div>
-									
-									<div class="edit-actions">
-										<button type="button" class="btn-secondary" onclick={cancelEdit}>取消</button>
-										<button type="submit" class="btn-primary">
-											<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-												<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4 12 14.01l-3-3"/>
-											</svg>
-											保存修改
-										</button>
-										<button type="submit" formaction="?/remove" class="btn-danger" onclick={(event) => {
-											if (!confirm(`确定删除「${site.name}」吗？此操作不可撤销。`)) event.preventDefault();
-										}}>
-											<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-												<path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-											</svg>
-											删除
-										</button>
-									</div>
-								</form>
-							{:else}
-								<button type="button" class="site-card-content" onclick={() => startEdit(site.id)}>
-									<div class="logo-preview">
-										{#if site.logo?.startsWith('data:') || site.logo?.startsWith('http')}
-											<img src={site.logo} alt="" />
-										{:else}
-											<span>{site.name.slice(0, 1)}</span>
-										{/if}
-									</div>
-									
-									<div class="site-card-info">
-										<div class="site-card-header">
-											<h3>{site.name}</h3>
-											<div class="site-badges">
-												{#if site.featured}
-													<span class="badge featured">精选</span>
-												{/if}
-												{#if site.hide}
-													<span class="badge hidden">隐藏</span>
-												{/if}
-											</div>
-										</div>
-										
-										<p class="site-desc">{site.desc || '暂无备注'}</p>
-										
-										<div class="site-meta">
-											<span class="meta-item">
-												<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-													<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-												</svg>
-												{site.category}
-											</span>
-											<span class="meta-item">
-												<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-													<line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/>
-													<line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/>
-												</svg>
-												排序 {site.sort}
-											</span>
-											<span class="meta-item">
-												<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-													<circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>
-												</svg>
-												ID {site.id}
-											</span>
-										</div>
-										
-										{#if site.tags.length > 0}
-											<div class="site-tags">
-												{#each site.tags.slice(0, 4) as tag}
-													<span class="tag">{tag}</span>
-												{/each}
-												{#if site.tags.length > 4}
-													<span class="tag more">+{site.tags.length - 4}</span>
-												{/if}
-											</div>
-										{/if}
-									</div>
-									
-									<div class="site-card-action">
-										<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-											<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-											<path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-										</svg>
-									</div>
-								</button>
+
+					<form class="stack-form" method="POST" action={selectedSite ? '?/updateSite' : '?/createSite'}>
+						{#if selectedSite}
+							<input name="id" type="hidden" value={selectedSite?.id} />
+						{/if}
+						<label>
+							<span>名称</span>
+							<input name="name" value={selectedSite?.name ?? ''} required />
+						</label>
+						<label>
+							<span>链接</span>
+							<input name="url" type="url" value={selectedSite?.url ?? ''} required />
+						</label>
+						<label>
+							<span>三级分类</span>
+							<select name="category_id" value={String(defaultCategoryId())}>
+								{#each leafCategories as category}
+									<option value={category.id}>{category.name}</option>
+								{/each}
+							</select>
+						</label>
+						<input name="categoryName" type="hidden" value={categoryNameById.get(defaultCategoryId()) ?? ''} />
+						<label>
+							<span>Logo 地址 / Base64</span>
+							<input name="logo" value={selectedSite ? editLogoBase64 || selectedSite.logo : createLogoBase64} />
+						</label>
+						<label>
+							<span>上传本地图片（自动转 Base64）</span>
+							<input type="file" accept="image/*" onchange={selectedSite ? handleEditUpload : handleCreateUpload} />
+						</label>
+						<label>
+							<span>简介</span>
+							<textarea name="desc" rows="4">{selectedSite?.desc ?? ''}</textarea>
+						</label>
+						<label>
+							<span>标签</span>
+							<input name="tags" value={selectedSite?.tags.join(', ') ?? ''} placeholder="AI, 设计, 导航源" />
+						</label>
+						<label>
+							<span>来源站点</span>
+							<input name="source_site" value={selectedSite?.source_site ?? ''} placeholder="例如：Uxmap" />
+						</label>
+						<label>
+							<span>来源路径</span>
+							<input name="source_category_path" value={selectedSite?.source_category_path ?? ''} placeholder="来源分类路径" />
+						</label>
+						<label>
+							<span>归一化域名</span>
+							<input name="normalized_domain" value={selectedSite?.normalized_domain ?? ''} placeholder="example.com" />
+						</label>
+						<div class="inline-fields">
+							<label>
+								<span>排序</span>
+								<input name="sort" type="number" value={selectedSite?.sort ?? 100} />
+							</label>
+							<label class="check">
+								<input name="featured" type="checkbox" checked={Boolean(selectedSite?.featured)} />
+								<span>精选</span>
+							</label>
+							<label class="check">
+								<input name="hidden" type="checkbox" checked={Boolean(selectedSite?.hide)} />
+								<span>隐藏</span>
+							</label>
+						</div>
+						<label>
+							<span>副标题 / 目录名</span>
+							<input name="catelog" value={selectedSite?.catelog ?? categoryNameById.get(defaultCategoryId()) ?? ''} />
+						</label>
+						<div class="button-row">
+							<button class="primary" type="submit">{selectedSite ? '保存修改' : '新增站点'}</button>
+							{#if selectedSite}
+								<button class="ghost" type="button" onclick={() => { selectedSiteId = null; editLogoBase64 = ''; }}>切换为新建</button>
 							{/if}
-						</article>
-					{/each}
-				{/if}
-			</section>
-		{/if}
+						</div>
+					</form>
+
+					{#if selectedSite}
+						<form method="POST" action="?/removeSite">
+							<input name="id" type="hidden" value={selectedSite?.id} />
+							<button class="danger" type="submit">删除当前站点</button>
+						</form>
+					{/if}
+				</section>
+			</aside>
+		</div>
 	{/if}
 </main>
 
 <style>
-	:global(html) {
-		scroll-behavior: smooth;
+	:global(body) {
+		margin: 0;
+		background: #f4f7fb;
+		color: #162033;
+		font-family:
+			'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', -apple-system, BlinkMacSystemFont, sans-serif;
+	}
+
+	:global(button),
+	:global(input),
+	:global(select),
+	:global(textarea) {
+		font: inherit;
 	}
 
 	.admin-shell {
-		min-height: 100dvh;
-		background: #f8fafc;
-		color: #0f172a;
-		font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+		padding: 22px;
+		display: grid;
+		gap: 18px;
 	}
 
-	.admin-header {
-		position: sticky;
-		top: 0;
-		z-index: 100;
+	.admin-topbar,
+	.status-strip,
+	.workspace,
+	.login-card,
+	.notice {
+		border-radius: 22px;
+		border: 1px solid #e0e6ef;
+		background: rgba(255, 255, 255, 0.96);
+	}
+
+	.admin-topbar {
+		padding: 22px 24px;
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
 		gap: 16px;
-		border-bottom: 1px solid rgba(15, 23, 42, 0.06);
-		background: rgba(255, 255, 255, 0.92);
-		backdrop-filter: blur(12px);
-		padding: 12px 24px;
 	}
 
-	.header-brand {
-		display: flex;
-		align-items: center;
-		gap: 16px;
-	}
-
-	.back-link {
-		display: inline-flex;
-		align-items: center;
-		gap: 6px;
-		border-radius: 8px;
-		background: transparent;
-		padding: 8px 12px;
-		color: #64748b;
-		font-size: 14px;
-		font-weight: 600;
-		text-decoration: none;
-		transition: all 0.2s ease;
-	}
-
-	.back-link:hover {
-		background: rgba(15, 23, 42, 0.04);
-		color: #0f172a;
-	}
-
-	.brand-info {
-		display: flex;
-		flex-direction: column;
-		gap: 2px;
-	}
-
-	.brand-label {
-		color: #94a3b8;
-		font-size: 12px;
-		font-weight: 600;
-		letter-spacing: 0.5px;
+	.eyebrow {
+		margin: 0 0 6px;
+		font-size: 0.75rem;
+		color: #5c6b82;
+		letter-spacing: 0.08em;
 		text-transform: uppercase;
 	}
 
-	h1 {
+	h1,
+	h2,
+	h3,
+	p {
 		margin: 0;
-		font-size: 20px;
-		font-weight: 700;
-		letter-spacing: -0.025em;
 	}
 
-	h2 {
-		margin: 0;
-		font-size: 18px;
-		font-weight: 700;
-		letter-spacing: -0.025em;
-	}
-
-	h3 {
-		margin: 0;
-		font-size: 15px;
-		font-weight: 600;
-	}
-
-	.header-actions {
+	.topbar-actions,
+	.button-row,
+	.inline-fields {
 		display: flex;
-		align-items: center;
-		gap: 12px;
+		gap: 10px;
 	}
 
-	.status-badge {
-		border-radius: 999px;
-		background: #dcfce7;
-		color: #166534;
-		padding: 4px 12px;
-		font-size: 12px;
-		font-weight: 600;
-	}
-
-	.ghost-button {
-		border: 1px solid rgba(15, 23, 42, 0.1);
-		border-radius: 8px;
-		background: transparent;
-		padding: 8px 16px;
-		color: #64748b;
-		font-size: 14px;
-		font-weight: 600;
+	.primary,
+	.ghost,
+	.danger {
+		border: 0;
+		border-radius: 14px;
+		padding: 11px 14px;
 		cursor: pointer;
-		transition: all 0.2s ease;
+		text-decoration: none;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
 	}
 
-	.ghost-button:hover {
-		background: rgba(15, 23, 42, 0.04);
-		color: #0f172a;
+	.primary {
+		background: #173a66;
+		color: #fff;
+	}
+
+	.ghost {
+		background: #edf2f8;
+		color: #22314c;
+	}
+
+	.danger {
+		width: 100%;
+		background: #fff1f1;
+		color: #a03131;
+		margin-top: 12px;
 	}
 
 	.notice {
-		display: flex;
-		align-items: center;
-		gap: 10px;
-		margin: 16px 24px 0;
-		border-radius: 10px;
-		padding: 12px 16px;
-		font-size: 14px;
-		font-weight: 500;
-		animation: slide-down 0.3s ease;
-	}
-
-	.notice.error {
-		border: 1px solid #fecaca;
-		background: #fef2f2;
-		color: #991b1b;
+		padding: 14px 16px;
 	}
 
 	.notice.success {
-		border: 1px solid #bbf7d0;
-		background: #f0fdf4;
-		color: #166534;
+		border-color: #cfe7d5;
+		background: #f4fbf6;
 	}
 
-	@keyframes slide-down {
-		from {
-			opacity: 0;
-			transform: translateY(-8px);
-		}
-		to {
-			opacity: 1;
-			transform: translateY(0);
-		}
+	.notice.error {
+		border-color: #f1cfd3;
+		background: #fff6f7;
 	}
 
-	.login-panel {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		min-height: calc(100dvh - 120px);
-		padding: 24px;
-	}
-
-	.login-content {
-		width: 100%;
-		max-width: 420px;
-		border: 1px solid rgba(15, 23, 42, 0.06);
-		border-radius: 16px;
-		background: #ffffff;
-		padding: 40px;
-		box-shadow: 0 20px 40px -12px rgba(15, 23, 42, 0.08);
-		text-align: center;
-	}
-
-	.login-icon {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		width: 64px;
-		height: 64px;
-		border-radius: 16px;
-		background: #f1f5f9;
-		color: #64748b;
-		margin-bottom: 20px;
-	}
-
-	.login-icon.warning {
-		background: #fef3c7;
-		color: #d97706;
-	}
-
-	.login-content h2 {
-		font-size: 24px;
-		margin-bottom: 8px;
-	}
-
-	.login-content p {
-		margin: 0 0 24px;
-		color: #64748b;
-		font-size: 14px;
-		line-height: 1.6;
+	.login-card {
+		padding: 28px;
+		max-width: 520px;
 	}
 
 	.login-form {
-		text-align: left;
-	}
-
-	.input-group {
 		display: flex;
-		gap: 8px;
+		gap: 12px;
+		margin-top: 16px;
 	}
 
-	.input-group input {
+	.login-form input {
 		flex: 1;
 	}
 
-	.input-group button {
-		display: inline-flex;
-		align-items: center;
-		gap: 6px;
-		white-space: nowrap;
-	}
-
-	.stats-grid {
+	.status-strip {
+		padding: 16px 18px;
 		display: grid;
-		grid-template-columns: repeat(4, 1fr);
+		grid-template-columns: repeat(4, minmax(0, 1fr));
 		gap: 12px;
-		padding: 16px 24px;
 	}
 
-	.stat-card {
-		border: 1px solid rgba(15, 23, 42, 0.06);
-		border-radius: 12px;
-		background: #ffffff;
-		padding: 16px 20px;
-		text-align: center;
+	.status-strip div {
+		padding: 12px 14px;
+		border-radius: 16px;
+		background: #f6f8fb;
+		display: grid;
+		gap: 4px;
 	}
 
-	.stat-value {
-		font-size: 28px;
-		font-weight: 700;
-		letter-spacing: -0.025em;
-		color: #0f172a;
+	.status-strip strong {
+		font-size: 1.3rem;
 	}
 
-	.stat-value.success {
-		color: #16a34a;
+	.status-strip span,
+	.panel-head p,
+	.tree-button small,
+	.site-row small,
+	.preview-box span {
+		color: #66758d;
 	}
 
-	.stat-value.muted {
-		color: #94a3b8;
+	.workspace {
+		display: grid;
+		grid-template-columns: 280px minmax(0, 1fr) 360px;
+		gap: 0;
+		overflow: hidden;
 	}
 
-	.stat-value.featured {
-		color: #d97706;
+	.column {
+		padding: 18px;
+		display: grid;
+		gap: 18px;
+		min-height: 0;
 	}
 
-	.stat-label {
-		margin-top: 4px;
-		color: #64748b;
-		font-size: 12px;
-		font-weight: 600;
+	.left,
+	.middle {
+		border-right: 1px solid #e8edf4;
 	}
 
-	.action-bar {
-		padding: 0 24px 16px;
+	.panel {
+		border: 1px solid #e5eaf2;
+		border-radius: 20px;
+		padding: 16px;
+		display: grid;
+		gap: 14px;
+		background: #fbfcfe;
+		min-height: 0;
 	}
 
-	.tabs {
-		display: flex;
+	.panel-head {
+		display: grid;
+		gap: 6px;
+	}
+
+	.category-tree,
+	.site-list {
+		display: grid;
+		gap: 10px;
+		overflow: auto;
+	}
+
+	.category-tree {
+		max-height: 360px;
+		padding-right: 4px;
+	}
+
+	.tree-item {
+		display: grid;
 		gap: 8px;
 	}
 
-	.tab {
-		display: inline-flex;
-		align-items: center;
-		gap: 8px;
-		border: 1px solid rgba(15, 23, 42, 0.1);
-		border-radius: 10px;
-		background: #ffffff;
-		padding: 10px 18px;
-		color: #64748b;
-		font-size: 14px;
-		font-weight: 600;
+	.tree-button {
+		border: 1px solid #e1e6ef;
+		border-radius: 16px;
+		background: #fff;
+		padding: 12px;
+		text-align: left;
 		cursor: pointer;
-		transition: all 0.2s ease;
+		display: grid;
+		gap: 6px;
 	}
 
-	.tab:hover {
-		border-color: rgba(15, 23, 42, 0.2);
-		color: #0f172a;
-	}
-
-	.tab.active {
-		border-color: #0f172a;
-		background: #0f172a;
-		color: #ffffff;
-	}
-
-	.tab.primary {
-		border-color: #0f172a;
-		background: #0f172a;
-		color: #ffffff;
-	}
-
-	.tab.primary.active {
-		background: #1e293b;
-	}
-
-	.filter-bar {
+	.tree-button div {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
 		gap: 12px;
-		padding: 0 24px 16px;
 	}
 
-	.search-box {
-		position: relative;
-		flex: 1;
-		max-width: 400px;
+	.tree-button span {
+		font-size: 0.78rem;
+		color: #617189;
 	}
 
-	.search-box svg {
-		position: absolute;
-		left: 14px;
-		top: 50%;
-		transform: translateY(-50%);
-		color: #94a3b8;
-		pointer-events: none;
-	}
-
-	.search-box input {
-		width: 100%;
-		border: 1px solid rgba(15, 23, 42, 0.1);
-		border-radius: 10px;
-		background: #ffffff;
-		padding: 10px 40px 10px 42px;
-		font-size: 14px;
-		transition: all 0.2s ease;
-	}
-
-	.search-box input:focus {
-		outline: none;
-		border-color: #0f172a;
-		box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.06);
-	}
-
-	.clear-btn {
-		position: absolute;
-		right: 10px;
-		top: 50%;
-		transform: translateY(-50%);
-		border: none;
-		background: transparent;
-		padding: 4px;
-		color: #94a3b8;
-		cursor: pointer;
-		transition: color 0.2s ease;
-	}
-
-	.clear-btn:hover {
-		color: #64748b;
-	}
-
-	.filter-controls {
-		display: flex;
+	.tree-children {
+		padding-left: 14px;
+		display: grid;
 		gap: 8px;
 	}
 
-	.select-wrapper {
-		position: relative;
-	}
-
-	.select-wrapper select {
-		appearance: none;
-		border: 1px solid rgba(15, 23, 42, 0.1);
-		border-radius: 10px;
-		background: #ffffff;
-		padding: 10px 36px 10px 14px;
-		font-size: 14px;
-		font-weight: 500;
-		cursor: pointer;
-		transition: all 0.2s ease;
-	}
-
-	.select-wrapper select:focus {
-		outline: none;
-		border-color: #0f172a;
-	}
-
-	.select-wrapper::after {
-		content: '';
-		position: absolute;
-		right: 14px;
-		top: 50%;
-		transform: translateY(-50%);
-		width: 0;
-		height: 0;
-		border-left: 4px solid transparent;
-		border-right: 4px solid transparent;
-		border-top: 5px solid #94a3b8;
-		pointer-events: none;
-	}
-
-	.create-panel {
-		padding: 0 24px 24px;
-	}
-
-	.editor-form {
-		border: 1px solid rgba(15, 23, 42, 0.06);
-		border-radius: 16px;
-		background: #ffffff;
-		padding: 24px;
-		box-shadow: 0 20px 40px -12px rgba(15, 23, 42, 0.06);
-	}
-
-	.form-header {
-		margin-bottom: 20px;
-		padding-bottom: 16px;
-		border-bottom: 1px solid rgba(15, 23, 42, 0.06);
-	}
-
-	.form-header p {
-		margin: 4px 0 0;
-		color: #64748b;
-		font-size: 14px;
-	}
-
-	.form-grid {
+	.stack-form {
 		display: grid;
-		grid-template-columns: repeat(2, 1fr);
-		gap: 16px;
-	}
-
-	.form-grid.compact {
 		gap: 12px;
 	}
 
-	.form-group {
-		display: flex;
-		flex-direction: column;
+	.stack-form.compact {
+		align-content: start;
+	}
+
+	label {
+		display: grid;
 		gap: 6px;
 	}
 
-	.form-group.wide {
-		grid-column: 1 / -1;
-	}
-
-	.form-group label {
-		display: flex;
-		align-items: center;
-		gap: 4px;
-		color: #475569;
-		font-size: 13px;
-		font-weight: 600;
-	}
-
-	.required {
-		color: #dc2626;
-	}
-
-	.hint {
-		color: #94a3b8;
-		font-size: 12px;
+	label span {
+		font-size: 0.84rem;
+		color: #47566e;
 	}
 
 	input,
 	select,
 	textarea {
 		width: 100%;
-		border: 1px solid rgba(15, 23, 42, 0.12);
-		border-radius: 8px;
-		background: #ffffff;
-		padding: 10px 12px;
-		font-size: 14px;
-		transition: all 0.2s ease;
+		box-sizing: border-box;
+		border: 1px solid #d5deea;
+		border-radius: 14px;
+		padding: 11px 12px;
+		background: #fff;
 	}
 
-	input:focus,
-	select:focus,
-	textarea:focus {
-		outline: none;
-		border-color: #0f172a;
-		box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.06);
-	}
-
-	textarea {
-		resize: vertical;
-		min-height: 60px;
-	}
-
-	.checkbox-group {
+	.check {
 		display: flex;
-		gap: 20px;
-	}
-
-	.checkbox-label {
-		display: inline-flex;
 		align-items: center;
 		gap: 8px;
-		cursor: pointer;
-		font-size: 14px;
-		font-weight: 500;
+		border: 1px solid #d5deea;
+		border-radius: 14px;
+		padding: 11px 12px;
+		background: #fff;
 	}
 
-	.checkbox-label input {
+	.check input {
 		width: auto;
+		margin: 0;
 	}
 
-	.form-actions {
-		display: flex;
-		justify-content: flex-end;
+	.filters {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) 180px auto;
 		gap: 10px;
-		margin-top: 20px;
-		padding-top: 16px;
-		border-top: 1px solid rgba(15, 23, 42, 0.06);
-	}
-
-	.btn-primary {
-		display: inline-flex;
-		align-items: center;
-		gap: 6px;
-		border: none;
-		border-radius: 10px;
-		background: #0f172a;
-		padding: 10px 18px;
-		color: #ffffff;
-		font-size: 14px;
-		font-weight: 600;
-		cursor: pointer;
-		transition: all 0.2s ease;
-	}
-
-	.btn-primary:hover {
-		background: #1e293b;
-		transform: translateY(-1px);
-	}
-
-	.btn-primary:active {
-		transform: translateY(0);
-	}
-
-	.btn-secondary {
-		display: inline-flex;
-		align-items: center;
-		gap: 6px;
-		border: 1px solid rgba(15, 23, 42, 0.12);
-		border-radius: 10px;
-		background: #ffffff;
-		padding: 10px 18px;
-		color: #64748b;
-		font-size: 14px;
-		font-weight: 600;
-		cursor: pointer;
-		transition: all 0.2s ease;
-	}
-
-	.btn-secondary:hover {
-		background: #f8fafc;
-		color: #0f172a;
-	}
-
-	.btn-danger {
-		display: inline-flex;
-		align-items: center;
-		gap: 6px;
-		border: 1px solid #fecaca;
-		border-radius: 10px;
-		background: #fef2f2;
-		padding: 10px 18px;
-		color: #dc2626;
-		font-size: 14px;
-		font-weight: 600;
-		cursor: pointer;
-		transition: all 0.2s ease;
-	}
-
-	.btn-danger:hover {
-		background: #fee2e2;
-	}
-
-	.btn-icon {
-		border: none;
-		background: transparent;
-		padding: 8px;
-		color: #94a3b8;
-		cursor: pointer;
-		transition: color 0.2s ease;
-	}
-
-	.btn-icon:hover {
-		color: #64748b;
 	}
 
 	.site-list {
+		max-height: 620px;
+		padding-right: 4px;
+	}
+
+	.site-row {
 		display: grid;
+		grid-template-columns: 42px minmax(0, 1fr);
 		gap: 12px;
-		padding: 0 24px 24px;
-	}
-
-	.empty-state {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		justify-content: center;
-		gap: 12px;
-		border: 1px dashed rgba(15, 23, 42, 0.12);
+		padding: 12px;
+		border: 1px solid #e3e8f1;
 		border-radius: 16px;
-		padding: 48px 24px;
-		color: #94a3b8;
-		text-align: center;
-	}
-
-	.empty-state p {
-		margin: 0;
-		font-size: 15px;
-		font-weight: 500;
-	}
-
-	.site-card {
-		border: 1px solid rgba(15, 23, 42, 0.06);
-		border-radius: 12px;
-		background: #ffffff;
-		transition: all 0.2s ease;
-		animation: fade-in 0.4s ease both;
-	}
-
-	@keyframes fade-in {
-		from {
-			opacity: 0;
-			transform: translateY(8px);
-		}
-		to {
-			opacity: 1;
-			transform: translateY(0);
-		}
-	}
-
-	.site-card:hover {
-		border-color: rgba(15, 23, 42, 0.12);
-		box-shadow: 0 12px 24px -8px rgba(15, 23, 42, 0.08);
-	}
-
-	.site-card.hidden {
-		opacity: 0.6;
-	}
-
-	.site-card.featured {
-		border-color: rgba(217, 119, 6, 0.2);
-		background: linear-gradient(135deg, rgba(254, 243, 199, 0.3), rgba(255, 255, 255, 1));
-	}
-
-	.site-card.editing {
-		border-color: #0f172a;
-		box-shadow: 0 20px 40px -12px rgba(15, 23, 42, 0.15);
-	}
-
-	.site-card-content {
-		display: flex;
-		align-items: flex-start;
-		gap: 16px;
-		padding: 16px;
-		cursor: pointer;
+		background: #fff;
 		text-align: left;
-		width: 100%;
-		border: none;
-		background: transparent;
-		font: inherit;
-		color: inherit;
+		cursor: pointer;
 	}
 
-	.logo-preview {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		flex-shrink: 0;
-		width: 48px;
-		height: 48px;
-		border-radius: 10px;
-		background: #f1f5f9;
-		color: #475569;
-		font-size: 18px;
-		font-weight: 700;
-		overflow: hidden;
+	.site-row.selected {
+		border-color: #173a66;
+		box-shadow: 0 0 0 1px rgba(23, 58, 102, 0.12);
 	}
 
-	.logo-preview img {
-		width: 100%;
-		height: 100%;
+	.site-row img {
+		width: 42px;
+		height: 42px;
+		border-radius: 12px;
+		border: 1px solid #e2e8f0;
+		background: #f8fafc;
 		object-fit: cover;
 	}
 
-	.site-card-info {
-		flex: 1;
-		min-width: 0;
-	}
-
-	.site-card-header {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 8px;
-		margin-bottom: 4px;
-	}
-
-	.site-badges {
-		display: flex;
+	.site-row div,
+	.preview-box {
+		display: grid;
 		gap: 6px;
 	}
 
-	.badge {
-		border-radius: 4px;
-		padding: 2px 8px;
-		font-size: 11px;
-		font-weight: 600;
-		text-transform: uppercase;
-		letter-spacing: 0.5px;
+	.site-row p,
+	.empty {
+		color: #5f6d84;
+		font-size: 0.9rem;
 	}
 
-	.badge.featured {
-		background: #fef3c7;
-		color: #b45309;
-	}
-
-	.badge.hidden {
-		background: #e2e8f0;
-		color: #64748b;
-	}
-
-	.site-desc {
-		margin: 0;
-		color: #64748b;
-		font-size: 13px;
-		line-height: 1.5;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-
-	.site-meta {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 12px;
-		margin-top: 8px;
-	}
-
-	.meta-item {
-		display: inline-flex;
-		align-items: center;
-		gap: 4px;
-		color: #94a3b8;
-		font-size: 12px;
-		font-weight: 500;
-	}
-
-	.site-tags {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 6px;
-		margin-top: 8px;
-	}
-
-	.tag {
-		border-radius: 4px;
-		background: #f1f5f9;
-		padding: 2px 8px;
-		color: #475569;
-		font-size: 11px;
-		font-weight: 500;
-	}
-
-	.tag.more {
-		background: #e2e8f0;
-		color: #64748b;
-	}
-
-	.site-card-action {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		flex-shrink: 0;
-		width: 36px;
-		height: 36px;
-		border-radius: 8px;
-		background: #f8fafc;
-		color: #94a3b8;
-		transition: all 0.2s ease;
-	}
-
-	.site-card:hover .site-card-action {
-		background: #f1f5f9;
-		color: #64748b;
-	}
-
-	.edit-form {
-		padding: 16px;
-	}
-
-	.edit-header {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		margin-bottom: 16px;
-		padding-bottom: 12px;
-		border-bottom: 1px solid rgba(15, 23, 42, 0.06);
-	}
-
-	.site-preview {
-		display: flex;
-		align-items: center;
+	.import-grid {
+		display: grid;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
 		gap: 12px;
 	}
 
-	.site-info {
-		display: flex;
-		flex-direction: column;
-		gap: 4px;
-	}
-
-	.site-id {
-		color: #94a3b8;
-		font-size: 12px;
-		font-weight: 500;
-	}
-
-	.site-status {
-		display: flex;
-		gap: 6px;
-	}
-
-	.status-tag {
-		border-radius: 4px;
-		padding: 2px 8px;
-		font-size: 11px;
-		font-weight: 600;
-	}
-
-	.status-tag.hidden {
-		background: #e2e8f0;
-		color: #64748b;
-	}
-
-	.status-tag.featured {
-		background: #fef3c7;
-		color: #b45309;
-	}
-
-	.edit-actions {
-		display: flex;
-		justify-content: flex-end;
+	.preview-box {
+		grid-template-columns: repeat(3, minmax(0, 1fr));
 		gap: 10px;
-		margin-top: 16px;
-		padding-top: 12px;
-		border-top: 1px solid rgba(15, 23, 42, 0.06);
 	}
 
-	@media (max-width: 1024px) {
-		.stats-grid {
-			grid-template-columns: repeat(2, 1fr);
-		}
+	.preview-box div {
+		padding: 12px;
+		border-radius: 16px;
+		background: #f3f7fb;
 	}
 
-	@media (max-width: 768px) {
-		.admin-header {
-			flex-direction: column;
-			align-items: stretch;
-			gap: 12px;
-		}
+	.preview-box strong {
+		font-size: 1.15rem;
+	}
 
-		.header-brand {
-			justify-content: space-between;
-		}
+	.empty {
+		padding: 16px 4px;
+		text-align: center;
+	}
 
-		.header-actions {
-			justify-content: flex-end;
-		}
-
-		.stats-grid {
-			grid-template-columns: repeat(2, 1fr);
-			padding: 12px 16px;
-		}
-
-		.action-bar,
-		.filter-bar,
-		.create-panel,
-		.site-list {
-			padding-left: 16px;
-			padding-right: 16px;
-		}
-
-		.filter-bar {
-			flex-direction: column;
-			align-items: stretch;
-		}
-
-		.search-box {
-			max-width: none;
-		}
-
-		.filter-controls {
-			justify-content: stretch;
-		}
-
-		.filter-controls .select-wrapper {
-			flex: 1;
-		}
-
-		.form-grid {
+	@media (max-width: 1320px) {
+		.workspace {
 			grid-template-columns: 1fr;
 		}
 
-		.checkbox-group {
+		.left,
+		.middle {
+			border-right: 0;
+			border-bottom: 1px solid #e8edf4;
+		}
+
+		.import-grid {
+			grid-template-columns: 1fr;
+		}
+	}
+
+	@media (max-width: 860px) {
+		.admin-shell {
+			padding: 14px;
+		}
+
+		.admin-topbar,
+		.status-strip {
+			grid-template-columns: 1fr;
+		}
+
+		.admin-topbar,
+		.login-form,
+		.filters,
+		.inline-fields,
+		.button-row,
+		.topbar-actions {
 			flex-direction: column;
-			gap: 12px;
 		}
 
-		.edit-actions {
-			flex-wrap: wrap;
+		.status-strip,
+		.preview-box {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
 		}
-
-		.edit-actions button {
-			flex: 1;
-		}
-	}
-
-	.label-row {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 8px;
-	}
-
-	.add-cat-btn {
-		display: inline-flex;
-		align-items: center;
-		gap: 4px;
-		border: 1px dashed rgba(59, 130, 246, 0.4);
-		background: rgba(59, 130, 246, 0.04);
-		color: #3b82f6;
-		border-radius: 6px;
-		padding: 4px 8px;
-		font-size: 12px;
-		font-weight: 500;
-		cursor: pointer;
-		transition: all 0.2s ease;
-	}
-
-	.add-cat-btn:hover {
-		background: rgba(59, 130, 246, 0.1);
-		border-color: rgba(59, 130, 246, 0.6);
-	}
-
-	.create-category-panel {
-		margin-top: 10px;
-		padding: 12px;
-		background: linear-gradient(135deg, rgba(59, 130, 246, 0.05), rgba(139, 92, 246, 0.05));
-		border: 1px dashed rgba(59, 130, 246, 0.2);
-		border-radius: 10px;
-	}
-
-	.category-form {
-		display: flex;
-		flex-direction: column;
-		gap: 10px;
-	}
-
-	.cat-form-group {
-		display: flex;
-		flex-direction: column;
-		gap: 4px;
-	}
-
-	.cat-form-group label {
-		font-size: 12px;
-		font-weight: 500;
-		color: #475569;
-	}
-
-	.cat-form-group input {
-		font-size: 13px;
-		padding: 6px 10px;
-		border-radius: 6px;
-		border: 1px solid rgba(15, 23, 42, 0.1);
-		background: white;
-	}
-
-	.cat-actions {
-		display: flex;
-		gap: 8px;
-		justify-content: flex-end;
-		margin-top: 4px;
-	}
-
-	.logo-upload-section {
-		display: flex;
-		flex-direction: column;
-		gap: 10px;
-	}
-
-	.logo-upload-area {
-		position: relative;
-	}
-
-	.logo-upload-area input[type="file"] {
-		position: absolute;
-		opacity: 0;
-		width: 100%;
-		height: 100%;
-		cursor: pointer;
-	}
-
-	.upload-label {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: 8px;
-		padding: 20px;
-		background: #f8fafc;
-		border: 2px dashed rgba(148, 163, 184, 0.4);
-		border-radius: 12px;
-		color: #64748b;
-		transition: all 0.2s ease;
-	}
-
-	.upload-label:hover {
-		background: #f1f5f9;
-		border-color: rgba(59, 130, 246, 0.5);
-		color: #3b82f6;
-	}
-
-	.upload-label span {
-		font-size: 13px;
-		font-weight: 500;
-	}
-
-	.logo-preview-box {
-		display: flex;
-		align-items: center;
-		gap: 10px;
-		padding: 10px;
-		background: #f8fafc;
-		border: 1px solid rgba(15, 23, 42, 0.06);
-		border-radius: 10px;
-	}
-
-	.preview-img {
-		width: 48px;
-		height: 48px;
-		object-fit: contain;
-		border-radius: 8px;
-		background: white;
-		padding: 4px;
-	}
-
-	.clear-preview {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		width: 28px;
-		height: 28px;
-		border: none;
-		background: rgba(239, 68, 68, 0.1);
-		color: #ef4444;
-		border-radius: 8px;
-		cursor: pointer;
-		transition: all 0.2s ease;
-	}
-
-	.clear-preview:hover {
-		background: rgba(239, 68, 68, 0.2);
 	}
 </style>
