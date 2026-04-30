@@ -266,12 +266,12 @@
 										{#each topCategory.children as secondCategory}
 											<div class="subnav-group">
 												<button
-													class="subnav-item level-2 {isCategoryActive(secondCategory.id) ? 'active' : ''}"
+													class="subnav-heading {isCategoryActive(secondCategory.id) ? 'active' : ''}"
 													onclick={() => handleCategoryClick(secondCategory.id)}
 												>
-													<span class="subnav-dot"></span>
-													<span class="subnav-text">{secondCategory.name}</span>
-													<span class="subnav-count">{categoryCount(secondCategory.id)}</span>
+													<span class="subnav-heading-line"></span>
+													<span class="subnav-heading-text">{secondCategory.name}</span>
+													<span class="subnav-heading-count">{categoryCount(secondCategory.id)}</span>
 												</button>
 
 												{#if secondCategory.children.length}
@@ -401,7 +401,7 @@
 						{#each featuredSites as site, i}
 							<button
 								class="featured-card"
-								transition:fly={{ y: 20, opacity: 0, delay: i * 80, duration: 400 }}
+								transition:fade={{ delay: Math.min(i * 40, 180), duration: 220 }}
 								onclick={() => selectedSite = site}
 							>
 								<div class="featured-icon">
@@ -440,7 +440,7 @@
 
 			<!-- 分类内容 -->
 			{#each sortedCategoryNames as category, catIndex}
-				<section class="category-section" transition:fade={{ duration: 400, delay: catIndex * 50 + 200 }}>
+				<section class="category-section" transition:fade={{ duration: 220, delay: Math.min(catIndex * 45, 160) }}>
 					<div class="section-header">
 						<div class="section-title-wrap">
 							<span class="section-title-icon">📁</span>
@@ -452,7 +452,7 @@
 						{#each groupedSites[category] as site, i}
 							<button
 								class="site-card"
-								transition:fly={{ y: 15, opacity: 0, delay: i * 30, duration: 300 }}
+								transition:fade={{ delay: Math.min(i * 16, 140), duration: 180 }}
 								onclick={() => selectedSite = site}
 							>
 								<div class="site-icon">
@@ -985,14 +985,75 @@
 	.subnav-group {
 		display: flex;
 		flex-direction: column;
-		gap: 6px;
+		gap: 8px;
 	}
 
 	.subnav-children {
 		display: flex;
 		flex-direction: column;
 		gap: 6px;
-		padding-left: 12px;
+		padding-left: 14px;
+	}
+
+	.subnav-heading {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		width: 100%;
+		border: none;
+		background: rgba(102, 126, 234, 0.05);
+		text-align: left;
+		border-radius: var(--radius-lg);
+		padding: 9px 12px;
+		cursor: pointer;
+		transition: all var(--transition-fast);
+	}
+
+	.subnav-heading:hover {
+		background: rgba(102, 126, 234, 0.09);
+	}
+
+	.subnav-heading.active {
+		background: rgba(102, 126, 234, 0.13);
+		box-shadow: inset 0 0 0 1px rgba(102, 126, 234, 0.14);
+	}
+
+	.subnav-heading-line {
+		width: 16px;
+		height: 2px;
+		border-radius: 999px;
+		background: rgba(102, 126, 234, 0.45);
+		flex-shrink: 0;
+	}
+
+	.subnav-heading.active .subnav-heading-line {
+		background: var(--primary-color);
+	}
+
+	.subnav-heading-text {
+		flex: 1;
+		font-size: 0.87rem;
+		font-weight: 700;
+		color: var(--text-primary);
+		letter-spacing: 0;
+	}
+
+	.subnav-heading.active .subnav-heading-text {
+		color: var(--primary-color);
+	}
+
+	.subnav-heading-count {
+		flex-shrink: 0;
+		font-size: 0.72rem;
+		color: var(--text-secondary);
+		background: rgba(255, 255, 255, 0.82);
+		padding: 3px 8px;
+		border-radius: 999px;
+		font-weight: 700;
+	}
+
+	.subnav-heading.active .subnav-heading-count {
+		color: var(--primary-color);
 	}
 
 	.subnav-item {
@@ -1017,19 +1078,15 @@
 		background: rgba(102, 126, 234, 0.1);
 	}
 
-	.subnav-item.level-2 {
-		font-weight: 600;
-	}
-
 	.subnav-item.level-3 {
-		padding-left: 8px;
+		padding: 7px 10px 7px 8px;
 	}
 
 	.subnav-dot {
-		width: 7px;
-		height: 7px;
+		width: 6px;
+		height: 6px;
 		border-radius: 999px;
-		background: rgba(118, 75, 162, 0.4);
+		background: rgba(118, 75, 162, 0.48);
 		flex-shrink: 0;
 	}
 
@@ -1040,7 +1097,7 @@
 
 	.subnav-text {
 		flex: 1;
-		font-size: 0.86rem;
+		font-size: 0.84rem;
 		color: var(--text-secondary);
 		line-height: 1.35;
 	}
@@ -1052,9 +1109,9 @@
 
 	.subnav-count {
 		flex-shrink: 0;
-		font-size: 0.72rem;
+		font-size: 0.7rem;
 		color: var(--text-muted);
-		background: var(--bg-main);
+		background: rgba(255, 255, 255, 0.9);
 		padding: 3px 8px;
 		border-radius: 999px;
 	}
@@ -1538,7 +1595,11 @@
 		border: 1px solid var(--border-light);
 		border-radius: var(--radius-xl);
 		cursor: pointer;
-		transition: all var(--transition-normal);
+		transition:
+			border-color var(--transition-normal),
+			box-shadow var(--transition-normal),
+			transform 180ms ease,
+			background 180ms ease;
 		text-align: left;
 	}
 
@@ -1931,6 +1992,10 @@
 		.subnav-panel {
 			margin-left: 8px;
 			padding-left: 12px;
+		}
+
+		.subnav-heading {
+			padding: 8px 10px;
 		}
 
 		.subnav-children {
