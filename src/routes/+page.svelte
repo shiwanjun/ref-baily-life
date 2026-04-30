@@ -32,8 +32,55 @@
 		return output;
 	}
 
-	function flattenTree(nodes: CategoryNode[]): number[] {
-		return nodes.flatMap((node) => [node.id, ...flattenTree(node.children)]);
+	let searchQuery = $state('');
+	let selectedCategoryId = $state(0);
+	let expandedIds = $state(new Set<number>());
+
+	$effect(() => {
+		if (!selectedCategoryId) {
+			selectedCategoryId =
+				categories.find((item) => item.slug === 'ai-directory')?.id ??
+				categories.find((item) => item.level === 3)?.id ??
+				categories[0]?.id ??
+				0;
+		}
+
+		if (!expandedIds.size) {
+			expandedIds = new Set(categoryTree.map((item) => item.id));
+		}
+	});
+
+	const selectedCategory = $derived(byId.get(selectedCategoryId) ?? null);
+	const activeIds = $derived(selectedCategoryId ? new Set(collectDescendantIds(selectedCategoryId)) : new Set<number>());
+	const filteredSites = $derived(
+		sites.filter((site) => {
+			const inTree = !selectedCategoryId || activeIds.has(site.category_id);
+			if (!inTree || site.hide) return false;
+			const keyword = searchQuery.trim().toLowerCase();
+			if (!keyword) return true;
+			return `${site.name} ${site.desc} ${site.tags.join(' ')} ${site.category_path.join(' ')}`
+				.toLowerCase()
+				.includes(keyword);
+		})
+	);
+
+	const featuredSites = $derived(filteredSites.filter((site) => site.featured).slice(0, 8));
+	const groupedSites = $derived.by(() => {
+		const groups = new Map<string, NavigationSite[]>();
+		for (const site of filteredSites) {
+			const groupName = site.category_path.at(-1) ?? '未分类';
+			const bucket = groups.get(groupName) ?? [];
+			bucket.push(site);
+			groups.set(groupName, bucket);
+		}
+		return Array.from(groups.entries());
+	});
+
+	function toggleExpand(id: number) {
+		const next = new Set(expandedIds);
+		if (next.has(id)) next.delete(id);
+		else next.add(id);
+		expandedIds = next;
 	}
 
 	function categoryCount(categoryId: number) {
@@ -43,93 +90,6 @@
 
 	function fallbackLogo(url: string) {
 		return `https://www.google.com/s2/favicons?sz=64&domain_url=${encodeURIComponent(url)}`;
-	}
-
-	function lineageNames(categoryId: number) {
-		const names: string[] = [];
-		let current = byId.get(categoryId) ?? null;
-		while (current) {
-			names.unshift(current.name);
-			current = current.parent_id ? byId.get(current.parent_id) ?? null : null;
-		}
-		return names;
-	}
-
-	let searchQuery = $state('');
-	let selectedCategoryId = $state(0);
-	let expandedIds = $state(new Set<number>());
-
-	$effect(() => {
-		if (!selectedCategoryId) {
-			selectedCategoryId =
-				categories.find((item) => item.level === 1 && categoryCount(item.id) > 0)?.id ??
-				categories.find((item) => categoryCount(item.id) > 0)?.id ??
-				categories[0]?.id ??
-				0;
-		}
-
-		if (!expandedIds.size) {
-			expandedIds = new Set(flattenTree(categoryTree));
-		}
-	});
-
-	const selectedCategory = $derived(byId.get(selectedCategoryId) ?? null);
-	const selectedPath = $derived(selectedCategory ? lineageNames(selectedCategory.id) : []);
-	const activeIds = $derived(
-		selectedCategoryId ? new Set(collectDescendantIds(selectedCategoryId)) : new Set<number>()
-	);
-	const filteredSites = $derived(
-		sites.filter((site) => {
-			const inTree = !selectedCategoryId || activeIds.has(site.category_id);
-			if (!inTree || site.hide) return false;
-			const keyword = searchQuery.trim().toLowerCase();
-			if (!keyword) return true;
-			return `${site.name} ${site.desc} ${site.tags.join(' ')} ${site.category_path.join(' ')} ${site.normalized_domain}`
-				.toLowerCase()
-				.includes(keyword);
-		})
-	);
-	const featuredSites = $derived.by(() => {
-		const featured = filteredSites.filter((site) => site.featured);
-		return (featured.length ? featured : filteredSites).slice(0, 6);
-	});
-	const groupedSites = $derived.by(() => {
-		const groups = new Map<string, NavigationSite[]>();
-		for (const site of filteredSites) {
-			const groupName = site.category_path.at(-1) ?? '未分类';
-			const bucket = groups.get(groupName) ?? [];
-			bucket.push(site);
-			groups.set(groupName, bucket);
-		}
-		return Array.from(groups.entries()).map(([groupName, groupSites]) => [
-			groupName,
-			groupSites.sort((a, b) => Number(b.featured) - Number(a.featured) || a.sort - b.sort || a.id - b.id)
-		] as const);
-	});
-	const visibleTopCategories = $derived(
-		categoryTree
-			.map((node) => ({ node, count: categoryCount(node.id) }))
-			.filter((item) => item.count > 0)
-			.slice(0, 8)
-	);
-	const sourceHighlights = $derived.by(() => {
-		const counts = new Map<string, number>();
-		for (const site of filteredSites) {
-			const source = site.source_site?.trim();
-			if (!source) continue;
-			counts.set(source, (counts.get(source) ?? 0) + 1);
-		}
-		return Array.from(counts.entries())
-			.sort((a, b) => b[1] - a[1])
-			.slice(0, 5);
-	});
-	const leafCount = $derived(new Set(filteredSites.map((site) => site.category_path.at(-1) ?? '未分类')).size);
-
-	function toggleExpand(id: number) {
-		const next = new Set(expandedIds);
-		if (next.has(id)) next.delete(id);
-		else next.add(id);
-		expandedIds = next;
 	}
 </script>
 
@@ -141,7 +101,7 @@
 {#snippet categoryBranch(node: CategoryNode, depth = 0)}
 	<div class="tree-branch depth-{depth}">
 		<div class:active={selectedCategoryId === node.id} class="tree-node">
-			<div class="tree-main">
+			<span class="tree-label">
 				{#if node.children.length}
 					<button class="tree-toggle" type="button" aria-label="切换展开" onclick={() => toggleExpand(node.id)}>
 						{expandedIds.has(node.id) ? '−' : '+'}
@@ -149,11 +109,8 @@
 				{:else}
 					<span class="tree-dot"></span>
 				{/if}
-				<button class="tree-select" type="button" onclick={() => (selectedCategoryId = node.id)}>
-					<strong>{node.name}</strong>
-					<small>L{node.level}</small>
-				</button>
-			</div>
+				<button class="tree-select" type="button" onclick={() => selectedCategoryId = node.id}>{node.name}</button>
+			</span>
 			<span class="tree-count">{categoryCount(node.id)}</span>
 		</div>
 
@@ -171,17 +128,16 @@
 	<header class="topbar">
 		<div class="brand">
 			<a class="brand-mark" href="/">LT</a>
-			<div class="brand-copy">
-				<p class="eyebrow">LT NAVIGATION</p>
+			<div>
+				<p class="eyebrow">三级导航工作台</p>
 				<h1>LT导航</h1>
-				<p class="brand-note">AI、设计、开发、出海与资源的一站式导航台</p>
 			</div>
 		</div>
 
 		<div class="toolbar">
 			<label class="search">
-				<span>全站搜索</span>
-				<input bind:value={searchQuery} type="search" placeholder="搜索站点、标签、分类、域名" />
+				<span>搜索</span>
+				<input bind:value={searchQuery} type="search" placeholder="搜站点、标签、分类" />
 			</label>
 			<div class="toolbar-actions">
 				<a class="ghost-link" href="mailto:hello@liantang.fun">反馈</a>
@@ -195,25 +151,8 @@
 	<div class="layout">
 		<aside class="sidebar">
 			<div class="sidebar-head">
-				<div>
-					<p class="eyebrow">CATEGORY TREE</p>
-					<h2>分类导航</h2>
-				</div>
-				<button class:selected={!selectedCategoryId} class="sidebar-overview" type="button" onclick={() => (selectedCategoryId = 0)}>
-					<span>查看全部</span>
-					<strong>{sites.filter((site) => !site.hide).length}</strong>
-				</button>
-			</div>
-
-			<div class="sidebar-stats">
-				<div>
-					<strong>{categoryTree.length}</strong>
-					<span>一级大类</span>
-				</div>
-				<div>
-					<strong>{categories.filter((item) => item.level === 3).length}</strong>
-					<span>三级小类</span>
-				</div>
+				<h2>分类树</h2>
+				<p>{categories.filter((item) => item.level === 3).length} 个三级小类</p>
 			</div>
 
 			<div class="tree">
@@ -224,96 +163,57 @@
 		</aside>
 
 		<main class="content">
-			<section class="overview">
-				<div class="overview-main">
-					<div class="overview-copy">
-						<p class="eyebrow">CURRENT SCOPE</p>
-						<div class="breadcrumb">
-							{#if selectedPath.length}
-								{#each selectedPath as item, index}
-									<span>{item}</span>{#if index < selectedPath.length - 1}<i>/</i>{/if}
-								{/each}
-							{:else}
-								<span>全部导航</span>
-							{/if}
-						</div>
-						<h2>{selectedCategory?.name ?? '全部导航'}</h2>
-						<p class="overview-note">
-							{selectedCategory?.description ??
-								'按大类、中类、小类逐层浏览，也可以直接搜索站点、标签和域名。'}
-						</p>
-					</div>
-
-					<div class="overview-actions">
-						{#each visibleTopCategories as { node, count }}
-							<button
-								class:active={selectedCategoryId === node.id}
-								class="scope-chip"
-								type="button"
-								onclick={() => (selectedCategoryId = node.id)}
-							>
-								<span>{node.name}</span>
-								<small>{count}</small>
+			<section class="hero">
+				<div class="hero-copy">
+					<p class="eyebrow">当前范围</p>
+					<h2>{selectedCategory?.name ?? '全部导航'}</h2>
+					<p>{selectedCategory?.description ?? '从左侧分类树中选择一个大类、中类或小类。'}</p>
+					<div class="hero-pills">
+						{#each categoryTree as topCategory}
+							<button class:active={selectedCategoryId === topCategory.id} class="hero-pill" type="button" onclick={() => selectedCategoryId = topCategory.id}>
+								<span>{topCategory.name}</span>
+								<small>{categoryCount(topCategory.id)}</small>
 							</button>
 						{/each}
 					</div>
 				</div>
-
-				<div class="overview-stats">
+				<div class="hero-stats">
 					<div>
 						<strong>{filteredSites.length}</strong>
 						<span>当前站点</span>
 					</div>
 					<div>
-						<strong>{leafCount}</strong>
-						<span>覆盖小类</span>
-					</div>
-					<div>
 						<strong>{featuredSites.length}</strong>
-						<span>优先推荐</span>
+						<span>精选推荐</span>
 					</div>
 					<div>
 						<strong>{sites.filter((site) => !site.hide).length}</strong>
 						<span>总收录</span>
 					</div>
 				</div>
-
-				{#if sourceHighlights.length}
-					<div class="source-strip">
-						<span>来源导航</span>
-						<div>
-							{#each sourceHighlights as [source, count]}
-								<em>{source} · {count}</em>
-							{/each}
-						</div>
-					</div>
-				{/if}
 			</section>
 
 			{#if featuredSites.length}
 				<section class="panel">
 					<div class="panel-head">
-						<div>
-							<p class="eyebrow">HIGHLIGHTS</p>
-							<h3>优先看这些</h3>
-						</div>
-						<p>先把高价值站点抬到第一屏，避免一进来就空空荡荡。</p>
+						<h3>精选推荐</h3>
+						<p>优先展示更适合直接打开使用的站点。</p>
 					</div>
-
-					<div class="spotlight-grid">
+					<div class="card-grid featured">
 						{#each featuredSites as site}
-							<a class="spotlight-card" href={site.url} target="_blank" rel="noreferrer">
-								<div class="spotlight-head">
-									<img alt={site.name} src={site.logo || fallbackLogo(site.url)} />
-									<div>
+							<a class="site-card featured" href={site.url} target="_blank" rel="noreferrer">
+								<img alt={site.name} src={site.logo || fallbackLogo(site.url)} />
+								<div class="site-copy">
+									<div class="site-title-row">
 										<strong>{site.name}</strong>
 										<span>{site.category_path.at(-1)}</span>
 									</div>
-								</div>
-								<p>{site.desc}</p>
-								<div class="spotlight-meta">
-									<small>{site.source_site || site.category_path.at(-2) || '站点整理'}</small>
-									<small>{site.normalized_domain}</small>
+									<p>{site.desc}</p>
+									<div class="tag-row">
+										{#each site.tags.slice(0, 4) as tag}
+											<span>{tag}</span>
+										{/each}
+									</div>
 								</div>
 							</a>
 						{/each}
@@ -323,15 +223,12 @@
 
 			<section class="panel">
 				<div class="panel-head">
-					<div>
-						<p class="eyebrow">DIRECTORY</p>
-						<h3>分类站点列表</h3>
-					</div>
+					<h3>站点列表</h3>
 					<p>
 						{#if searchQuery}
-							关键词 “{searchQuery}” 共命中 {filteredSites.length} 个站点。
+							已按 “{searchQuery}” 过滤，共 {filteredSites.length} 条。
 						{:else}
-							按三级小类拆分展示，方便继续筛选、补充和精修。
+							按照三级小类分组展示，便于继续精修内容。
 						{/if}
 					</p>
 				</div>
@@ -341,36 +238,20 @@
 						{#each groupedSites as [groupName, groupSites]}
 							<section class="group">
 								<header class="group-head">
-									<div>
-										<h4>{groupName}</h4>
-										<p>{groupSites[0]?.category_path.slice(0, -1).join(' / ') || '未归类'}</p>
-									</div>
+									<h4>{groupName}</h4>
 									<span>{groupSites.length} 个站点</span>
 								</header>
-
 								<div class="card-grid">
 									{#each groupSites as site}
 										<a class="site-card" href={site.url} target="_blank" rel="noreferrer">
 											<img alt={site.name} src={site.logo || fallbackLogo(site.url)} />
 											<div class="site-copy">
-												<div class="site-title-row">
-													<strong>{site.name}</strong>
-													{#if site.featured}
-														<small class="site-badge">精选</small>
-													{/if}
-												</div>
+												<strong>{site.name}</strong>
 												<p>{site.desc}</p>
 												<div class="site-meta">
 													<span>{site.source_site || site.category_path.at(-2) || '手动整理'}</span>
 													<span>{site.normalized_domain}</span>
 												</div>
-												{#if site.tags.length}
-													<div class="tag-row">
-														{#each site.tags.slice(0, 3) as tag}
-															<em>{tag}</em>
-														{/each}
-													</div>
-												{/if}
 											</div>
 										</a>
 									{/each}
@@ -393,10 +274,10 @@
 	:global(body) {
 		margin: 0;
 		background:
-			radial-gradient(circle at top left, rgba(37, 99, 235, 0.08), transparent 24%),
-			radial-gradient(circle at bottom right, rgba(14, 165, 233, 0.07), transparent 28%),
-			#f3f6fb;
-		color: #0f172a;
+			radial-gradient(circle at top left, rgba(255, 202, 92, 0.16), transparent 24%),
+			radial-gradient(circle at top right, rgba(87, 188, 182, 0.14), transparent 28%),
+			#f7f5ef;
+		color: #1f2937;
 		font-family:
 			'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', -apple-system, BlinkMacSystemFont, sans-serif;
 	}
@@ -406,27 +287,23 @@
 		text-decoration: none;
 	}
 
-	:global(button),
-	:global(input) {
-		font: inherit;
-	}
-
 	.shell {
 		min-height: 100dvh;
+		position: relative;
 	}
 
 	.topbar {
+		display: grid;
+		grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
+		gap: 24px;
+		padding: 22px 28px 18px;
+		background: rgba(255, 251, 244, 0.92);
+		backdrop-filter: blur(20px);
+		border-bottom: 1px solid rgba(210, 197, 173, 0.5);
 		position: sticky;
 		top: 0;
 		z-index: 20;
-		display: grid;
-		grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
-		gap: 24px;
-		align-items: center;
-		padding: 18px 24px;
-		background: rgba(248, 250, 252, 0.86);
-		backdrop-filter: blur(18px);
-		border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+		box-shadow: 0 14px 36px -34px rgba(53, 44, 25, 0.45);
 	}
 
 	.brand {
@@ -436,51 +313,30 @@
 	}
 
 	.brand-mark {
-		width: 48px;
-		height: 48px;
-		border-radius: 14px;
+		width: 52px;
+		height: 52px;
+		border-radius: 18px;
+		background: linear-gradient(135deg, #1d5a73, #f0b53f);
+		color: #fff;
 		display: grid;
 		place-items: center;
-		background: linear-gradient(135deg, #0f172a, #2563eb);
-		color: #fff;
-		font-size: 1.05rem;
-		font-weight: 800;
-		box-shadow: 0 16px 28px -20px rgba(37, 99, 235, 0.58);
+		font-weight: 700;
+		font-size: 1.15rem;
+		box-shadow: 0 18px 34px -22px rgba(29, 90, 115, 0.65);
 	}
 
-	.brand-copy,
-	.overview-copy,
-	.sidebar-head,
-	.panel-head,
-	.site-copy,
-	.group {
-		display: grid;
-		gap: 6px;
-	}
-
-	.brand-copy h1,
-	.overview-copy h2,
+	.brand h1,
+	.hero h2,
 	.panel-head h3,
 	.group-head h4 {
 		margin: 0;
 	}
 
-	.brand-note,
-	.overview-note,
-	.panel-head p,
-	.group-head p,
-	.empty p,
-	.source-strip span {
-		margin: 0;
-		color: #64748b;
-	}
-
 	.eyebrow {
-		margin: 0;
-		font-size: 0.72rem;
-		letter-spacing: 0.14em;
-		color: #2563eb;
-		font-weight: 700;
+		margin: 0 0 6px;
+		font-size: 0.75rem;
+		color: #8c6f38;
+		letter-spacing: 0.12em;
 	}
 
 	.toolbar {
@@ -493,20 +349,18 @@
 	.search {
 		display: grid;
 		gap: 8px;
-		font-size: 0.82rem;
-		color: #475569;
+		font-size: 0.84rem;
+		color: #5a6472;
 	}
 
 	.search input {
 		width: 100%;
-		box-sizing: border-box;
-		border: 1px solid rgba(148, 163, 184, 0.24);
-		border-radius: 16px;
+		border: 1px solid rgba(203, 190, 165, 0.8);
+		border-radius: 18px;
 		padding: 14px 16px;
-		background: rgba(255, 255, 255, 0.94);
-		box-shadow:
-			0 1px 0 rgba(255, 255, 255, 0.85) inset,
-			0 10px 24px -24px rgba(15, 23, 42, 0.35);
+		font: inherit;
+		background: rgba(255, 255, 255, 0.92);
+		box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
 	}
 
 	.toolbar-actions {
@@ -516,453 +370,368 @@
 	}
 
 	.ghost-link,
-	.primary-link,
-	.scope-chip,
-	.sidebar-overview {
-		border-radius: 14px;
-		transition:
-			transform 0.18s ease,
-			border-color 0.18s ease,
-			background 0.18s ease,
-			box-shadow 0.18s ease;
-	}
-
-	.ghost-link,
 	.primary-link {
-		padding: 11px 16px;
+		border-radius: 999px;
+		padding: 10px 16px;
 		font-size: 0.92rem;
-		border: 1px solid transparent;
 	}
 
 	.ghost-link {
-		background: #fff;
-		border-color: rgba(148, 163, 184, 0.24);
-		color: #0f172a;
+		background: rgba(255, 255, 255, 0.85);
+		border: 1px solid rgba(211, 201, 180, 0.8);
 	}
 
 	.primary-link {
-		background: #2563eb;
+		background: linear-gradient(135deg, #ea9c2d, #cf7c1a);
 		color: #fff;
-		box-shadow: 0 14px 24px -18px rgba(37, 99, 235, 0.75);
+		box-shadow: 0 16px 28px -20px rgba(205, 124, 26, 0.65);
 	}
 
 	.layout {
 		display: grid;
-		grid-template-columns: 296px minmax(0, 1fr);
-		gap: 20px;
-		max-width: 1640px;
+		grid-template-columns: 320px minmax(0, 1fr);
+		min-height: calc(100dvh - 98px);
+		max-width: 1540px;
 		margin: 0 auto;
-		padding: 20px;
+		padding: 18px 18px 28px;
 		box-sizing: border-box;
 	}
 
-	.sidebar,
-	.panel,
-	.overview,
-	.empty {
-		background: rgba(255, 255, 255, 0.92);
-		border: 1px solid rgba(148, 163, 184, 0.18);
-		box-shadow:
-			0 1px 0 rgba(255, 255, 255, 0.9) inset,
-			0 28px 48px -40px rgba(15, 23, 42, 0.22);
-	}
-
 	.sidebar {
+		border: 1px solid rgba(214, 205, 184, 0.72);
+		background: rgba(255, 252, 246, 0.88);
+		padding: 22px 18px;
 		position: sticky;
-		top: 96px;
+		top: 116px;
 		align-self: start;
-		max-height: calc(100dvh - 116px);
+		max-height: calc(100dvh - 132px);
 		overflow: auto;
-		border-radius: 24px;
-		padding: 18px;
+		border-radius: 28px;
+		box-shadow: 0 22px 50px -42px rgba(64, 49, 29, 0.55);
 	}
 
 	.sidebar-head {
-		padding-bottom: 16px;
-		border-bottom: 1px solid rgba(226, 232, 240, 0.95);
+		margin-bottom: 18px;
+		padding-bottom: 14px;
+		border-bottom: 1px dashed rgba(203, 190, 165, 0.9);
 	}
 
-	.sidebar-overview {
-		border: 1px solid rgba(226, 232, 240, 1);
-		background: #f8fafc;
-		padding: 12px 14px;
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		color: #0f172a;
-		cursor: pointer;
+	.sidebar-head h2 {
+		margin: 0 0 6px;
+		font-size: 1rem;
 	}
 
-	.sidebar-overview.selected,
-	.scope-chip.active {
-		background: rgba(37, 99, 235, 0.08);
-		border-color: rgba(37, 99, 235, 0.26);
-		box-shadow: 0 16px 28px -24px rgba(37, 99, 235, 0.6);
+	.sidebar-head p,
+	.panel-head p,
+	.hero p,
+	.group-head span,
+	.empty p {
+		margin: 0;
+		color: #6b7280;
 	}
 
-	.sidebar-stats {
+	.tree {
 		display: grid;
-		grid-template-columns: repeat(2, minmax(0, 1fr));
-		gap: 10px;
-		margin: 16px 0 18px;
+		gap: 8px;
 	}
 
-	.sidebar-stats div,
-	.overview-stats div {
-		border-radius: 18px;
-		padding: 14px;
-		background: #f8fafc;
-		border: 1px solid rgba(226, 232, 240, 0.95);
+	.tree-branch {
 		display: grid;
-		gap: 4px;
-	}
-
-	.sidebar-stats strong,
-	.overview-stats strong {
-		font-size: 1.28rem;
-	}
-
-	.sidebar-stats span,
-	.overview-stats span,
-	.tree-count,
-	.tree-select small,
-	.site-meta span,
-	.spotlight-meta small {
-		color: #64748b;
-	}
-
-	.tree,
-	.tree-children,
-	.groups {
-		display: grid;
-		gap: 10px;
+		gap: 8px;
 	}
 
 	.tree-children {
-		padding-left: 14px;
+		display: grid;
+		gap: 8px;
+		padding-left: 16px;
 	}
 
 	.tree-node {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		gap: 10px;
-		padding: 10px 12px;
-		border-radius: 16px;
-		border: 1px solid rgba(226, 232, 240, 1);
-		background: #fff;
+		gap: 12px;
+		width: 100%;
+		border: 1px solid rgba(223, 214, 193, 0.92);
+		background: linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(251, 247, 239, 0.95));
+		border-radius: 18px;
+		padding: 12px 14px;
+		text-align: left;
+		box-shadow: 0 10px 24px -24px rgba(39, 45, 60, 0.28);
 	}
 
 	.tree-node.active {
-		border-color: rgba(37, 99, 235, 0.26);
-		background: rgba(37, 99, 235, 0.05);
+		border-color: rgba(230, 163, 71, 0.9);
+		background: linear-gradient(180deg, #fff8e8, #fffdf7);
+		box-shadow:
+			0 0 0 1px rgba(230, 163, 71, 0.15),
+			0 20px 36px -30px rgba(229, 159, 57, 0.5);
 	}
 
-	.tree-main {
+	.tree-label {
 		display: flex;
 		align-items: center;
 		gap: 10px;
 		min-width: 0;
-	}
-
-	.tree-toggle,
-	.tree-dot {
-		width: 18px;
-		height: 18px;
-		flex: 0 0 18px;
-		border-radius: 999px;
-		display: grid;
-		place-items: center;
-	}
-
-	.tree-toggle {
-		border: 1px solid rgba(148, 163, 184, 0.3);
-		background: #f8fafc;
-		color: #2563eb;
-		cursor: pointer;
-	}
-
-	.tree-dot {
-		background: linear-gradient(135deg, #2563eb, #0ea5e9);
 	}
 
 	.tree-select {
 		border: 0;
 		background: transparent;
 		padding: 0;
-		display: grid;
-		gap: 2px;
-		text-align: left;
 		cursor: pointer;
 		color: inherit;
-		min-width: 0;
+		text-align: left;
+	}
+
+	.tree-toggle,
+	.tree-dot {
+		width: 18px;
+		height: 18px;
+		border-radius: 999px;
+		display: inline-grid;
+		place-items: center;
+		flex: 0 0 18px;
+	}
+
+	.tree-toggle {
+		border: 1px solid rgba(212, 201, 181, 0.85);
+		background: #fffbf4;
+		padding: 0;
+		cursor: pointer;
+		color: #8a6b36;
+	}
+
+	.tree-dot {
+		background: linear-gradient(135deg, #f4c66f, #7ac3b1);
+	}
+
+	.tree-count {
+		font-size: 0.8rem;
+		color: #8a93a2;
 	}
 
 	.content {
+		padding: 10px 0 0 22px;
 		display: grid;
-		gap: 18px;
-		min-width: 0;
+		gap: 20px;
 	}
 
-	.overview,
+	.hero,
 	.panel,
 	.empty {
-		border-radius: 28px;
-		padding: 22px;
+		background: rgba(255, 252, 247, 0.88);
+		border: 1px solid rgba(217, 207, 186, 0.76);
+		border-radius: 30px;
+		box-shadow: 0 24px 60px -46px rgba(52, 43, 27, 0.38);
 	}
 
-	.overview {
+	.hero {
 		display: grid;
-		gap: 18px;
-	}
-
-	.overview-main {
-		display: grid;
-		grid-template-columns: minmax(0, 1fr) minmax(300px, 420px);
-		gap: 18px;
-		align-items: start;
-	}
-
-	.breadcrumb {
-		display: flex;
-		flex-wrap: wrap;
-		align-items: center;
-		gap: 8px;
-		color: #475569;
-		font-size: 0.92rem;
-	}
-
-	.breadcrumb i {
-		font-style: normal;
-		color: #94a3b8;
-	}
-
-	.overview-copy h2 {
-		font-size: clamp(2rem, 3vw, 3rem);
-		line-height: 1.02;
-		letter-spacing: -0.03em;
-	}
-
-	.overview-actions {
-		display: flex;
-		flex-wrap: wrap;
-		align-content: start;
-		gap: 10px;
-	}
-
-	.scope-chip {
-		border: 1px solid rgba(226, 232, 240, 1);
-		background: #f8fafc;
-		padding: 12px 14px;
-		display: inline-flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 12px;
-		cursor: pointer;
-		min-width: 138px;
-		color: #0f172a;
-	}
-
-	.scope-chip small {
-		color: #64748b;
-	}
-
-	.overview-stats {
-		display: grid;
-		grid-template-columns: repeat(4, minmax(0, 1fr));
-		gap: 12px;
-	}
-
-	.source-strip {
-		display: flex;
-		align-items: center;
-		gap: 12px;
-		padding-top: 2px;
-		border-top: 1px solid rgba(226, 232, 240, 0.9);
-	}
-
-	.source-strip div {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 8px;
-	}
-
-	.source-strip em,
-	.tag-row em,
-	.site-badge {
-		font-style: normal;
-		font-size: 0.76rem;
-		border-radius: 999px;
-		padding: 4px 8px;
-	}
-
-	.source-strip em {
-		background: rgba(37, 99, 235, 0.08);
-		color: #1d4ed8;
-	}
-
-	.panel-head {
 		grid-template-columns: minmax(0, 1fr) auto;
-		align-items: end;
-		padding-bottom: 14px;
-		border-bottom: 1px solid rgba(226, 232, 240, 0.95);
+		gap: 20px;
+		padding: 28px;
+		background:
+			linear-gradient(135deg, rgba(255, 245, 214, 0.92), rgba(255, 255, 255, 0.92)),
+			radial-gradient(circle at right top, rgba(104, 197, 182, 0.18), transparent 30%);
 	}
 
-	.spotlight-grid {
+	.hero-copy {
 		display: grid;
-		grid-template-columns: repeat(3, minmax(0, 1fr));
 		gap: 14px;
 	}
 
-	.spotlight-card,
+	.hero-copy h2 {
+		font-size: clamp(1.8rem, 3vw, 2.7rem);
+		letter-spacing: 0.01em;
+	}
+
+	.hero-pills {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 10px;
+		margin-top: 4px;
+	}
+
+	.hero-pill {
+		border: 1px solid rgba(216, 202, 173, 0.9);
+		background: rgba(255, 255, 255, 0.78);
+		color: #48556a;
+		border-radius: 999px;
+		padding: 9px 12px;
+		display: inline-flex;
+		align-items: center;
+		gap: 8px;
+		cursor: pointer;
+	}
+
+	.hero-pill.active {
+		background: #fff7df;
+		border-color: rgba(231, 172, 78, 0.95);
+		color: #6f4f14;
+	}
+
+	.hero-pill small {
+		font-size: 0.74rem;
+		color: #8d97a8;
+	}
+
+	.hero-stats {
+		display: grid;
+		grid-template-columns: repeat(3, minmax(92px, 1fr));
+		gap: 12px;
+	}
+
+	.hero-stats div {
+		padding: 16px 16px;
+		border-radius: 20px;
+		background: rgba(255, 255, 255, 0.78);
+		border: 1px solid rgba(220, 211, 193, 0.74);
+		display: grid;
+		gap: 6px;
+	}
+
+	.hero-stats strong {
+		font-size: 1.55rem;
+		color: #1f4b66;
+	}
+
+	.hero-stats span {
+		font-size: 0.84rem;
+		color: #7a8495;
+	}
+
+	.panel {
+		padding: 24px;
+		display: grid;
+		gap: 18px;
+	}
+
+	.panel-head {
+		display: grid;
+		gap: 8px;
+		padding-bottom: 12px;
+		border-bottom: 1px dashed rgba(213, 203, 183, 0.92);
+	}
+
+	.card-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+		gap: 16px;
+	}
+
 	.site-card {
-		border: 1px solid rgba(226, 232, 240, 1);
-		background: linear-gradient(180deg, rgba(255, 255, 255, 1), rgba(248, 250, 252, 0.96));
+		display: grid;
+		grid-template-columns: 44px minmax(0, 1fr);
+		gap: 14px;
+		padding: 18px;
+		border-radius: 22px;
+		background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(250, 247, 240, 0.96));
+		border: 1px solid rgba(223, 214, 194, 0.86);
 		transition:
 			transform 0.18s ease,
 			border-color 0.18s ease,
 			box-shadow 0.18s ease;
 	}
 
-	.spotlight-card:hover,
-	.site-card:hover,
-	.ghost-link:hover,
-	.primary-link:hover,
-	.scope-chip:hover,
-	.sidebar-overview:hover {
-		transform: translateY(-2px);
-		border-color: rgba(37, 99, 235, 0.24);
-		box-shadow: 0 18px 32px -28px rgba(37, 99, 235, 0.45);
+	.site-card:hover {
+		transform: translateY(-3px);
+		border-color: rgba(231, 170, 78, 0.85);
+		box-shadow: 0 22px 42px -28px rgba(89, 70, 34, 0.34);
 	}
 
-	.spotlight-card {
-		border-radius: 22px;
-		padding: 18px;
+	.site-card img {
+		width: 46px;
+		height: 46px;
+		border-radius: 14px;
+		background: #fff;
+		border: 1px solid rgba(226, 218, 200, 0.88);
+		object-fit: cover;
+	}
+
+	.site-copy {
 		display: grid;
-		gap: 14px;
-	}
-
-	.spotlight-head {
-		display: grid;
-		grid-template-columns: 48px minmax(0, 1fr);
-		gap: 12px;
-		align-items: center;
-	}
-
-	.spotlight-head div,
-	.site-copy,
-	.spotlight-card {
+		gap: 8px;
 		min-width: 0;
 	}
 
-	.spotlight-head strong,
 	.site-copy strong,
-	.group-head h4 {
-		font-size: 1rem;
+	.site-copy p,
+	.site-meta span,
+	.tag-row span,
+	.site-title-row span {
+		overflow-wrap: anywhere;
 	}
 
-	.spotlight-head span {
-		font-size: 0.8rem;
-		color: #64748b;
-	}
-
-	.spotlight-card p,
 	.site-copy p {
 		margin: 0;
-		color: #475569;
+		font-size: 0.92rem;
+		color: #5c6778;
 		line-height: 1.55;
-	}
-
-	.spotlight-card img,
-	.site-card img {
-		width: 48px;
-		height: 48px;
-		border-radius: 14px;
-		object-fit: cover;
-		background: #fff;
-		border: 1px solid rgba(226, 232, 240, 1);
-	}
-
-	.spotlight-meta,
-	.site-meta,
-	.tag-row,
-	.group-head {
-		display: flex;
-		flex-wrap: wrap;
-		align-items: center;
-		justify-content: space-between;
-		gap: 8px;
-	}
-
-	.card-grid {
-		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-		gap: 14px;
-	}
-
-	.group {
-		gap: 14px;
-		padding-top: 6px;
-	}
-
-	.group-head {
-		align-items: end;
-	}
-
-	.group-head div {
-		display: grid;
-		gap: 4px;
-	}
-
-	.group-head span {
-		font-size: 0.82rem;
-		color: #475569;
-	}
-
-	.site-card {
-		border-radius: 20px;
-		padding: 16px;
-		display: grid;
-		grid-template-columns: 48px minmax(0, 1fr);
-		gap: 14px;
-		align-items: start;
 	}
 
 	.site-title-row {
 		display: flex;
-		align-items: center;
+		align-items: start;
 		justify-content: space-between;
 		gap: 8px;
 	}
 
-	.site-badge {
-		background: rgba(37, 99, 235, 0.08);
-		color: #1d4ed8;
+	.site-title-row span,
+	.site-meta span,
+	.tag-row span {
+		font-size: 0.76rem;
+		color: #8a93a2;
 	}
 
 	.site-meta,
 	.tag-row {
-		justify-content: flex-start;
+		display: flex;
+		flex-wrap: wrap;
+		gap: 9px;
 	}
 
-	.tag-row em {
-		background: #eff6ff;
-		color: #1e40af;
+	.tag-row span {
+		padding: 5px 9px;
+		border-radius: 999px;
+		background: #fff4dc;
+		color: #8c6214;
+	}
+
+	.featured .site-card,
+	.site-card.featured {
+		background:
+			linear-gradient(180deg, rgba(255, 251, 234, 0.98), rgba(243, 251, 248, 0.98)),
+			radial-gradient(circle at right top, rgba(103, 197, 182, 0.15), transparent 35%);
+	}
+
+	.groups {
+		display: grid;
+		gap: 18px;
+	}
+
+	.group {
+		display: grid;
+		gap: 12px;
+	}
+
+	.group-head {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: 12px;
+		padding-left: 2px;
 	}
 
 	.empty {
+		padding: 42px 24px;
 		text-align: center;
 	}
 
-	.empty h3 {
-		margin: 0 0 8px;
-	}
-
-	@media (max-width: 1180px) {
+	@media (max-width: 1080px) {
 		.topbar,
 		.layout,
-		.overview-main,
-		.spotlight-grid {
+		.hero {
 			grid-template-columns: 1fr;
 		}
 
@@ -971,37 +740,29 @@
 			max-height: none;
 		}
 
-		.overview-stats {
-			grid-template-columns: repeat(2, minmax(0, 1fr));
+		.content {
+			padding-left: 0;
 		}
 	}
 
-	@media (max-width: 760px) {
+	@media (max-width: 720px) {
 		.topbar,
-		.layout {
-			padding: 14px;
+		.content {
+			padding-left: 16px;
+			padding-right: 16px;
+		}
+
+		.sidebar {
+			padding: 18px 16px;
 		}
 
 		.toolbar {
 			grid-template-columns: 1fr;
 		}
 
-		.toolbar-actions {
-			justify-content: flex-start;
-		}
-
-		.panel-head {
+		.toolbar-actions,
+		.hero-stats {
 			grid-template-columns: 1fr;
-		}
-
-		.overview-stats,
-		.sidebar-stats,
-		.card-grid {
-			grid-template-columns: 1fr;
-		}
-
-		.site-card {
-			grid-template-columns: 42px minmax(0, 1fr);
 		}
 	}
 </style>
